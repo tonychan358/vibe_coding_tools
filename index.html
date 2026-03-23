@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <!-- PWA 相關設定 (iOS 支援) -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="IdeaApp">
+    <link rel="apple-touch-icon" href="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Google_Keep_icon_%282020%29.svg/512px-Google_Keep_icon_%282020%29.svg.png">
+    
+    <title>My Idea App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <style>
+        body {
+            background-color: #f3f4f6;
+            -webkit-tap-highlight-color: transparent;
+            overscroll-behavior-y: none; /* 防止 iOS 橡皮筋下拉效果 */
+        }
+        .app-container {
+            max-width: 480px;
+            margin: 0 auto;
+            height: 100vh;
+            background-color: #f9fafb;
+            box-shadow: 0 0 20px rgba(0,0,0,0.05);
+            display: flex;
+            flex-col;
+            position: relative;
+        }
+        main {
+            flex: 1;
+            overflow-y: auto;
+            padding-bottom: 90px; /* 留給 Bottom Nav */
+        }
+        ::-webkit-scrollbar { display: none; }
+        .preview-scroll {
+            display: flex;
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            gap: 12px;
+            padding-bottom: 8px;
+        }
+        .preview-item {
+            scroll-snap-align: start;
+            flex: 0 0 auto;
+            position: relative;
+        }
+        /* 隱藏未選中的分頁 */
+        .view-section { display: none; }
+        .view-section.active { display: block; }
+        
+        /* 導覽列選中狀態 */
+        .nav-item.active { color: #2563eb; }
+        .nav-item.active i { font-weight: fill; }
+        
+        /* 卡片圖片捲動區 */
+        .card-image-gallery {
+            display: flex;
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            gap: 8px;
+            margin-top: 12px;
+            margin-bottom: 8px;
+        }
+        .card-image-gallery img {
+            scroll-snap-align: start;
+            border-radius: 8px;
+            height: 160px;
+            width: auto;
+            max-width: 90%;
+            object-fit: cover;
+            border: 1px solid #e5e7eb;
+        }
+        
+        /* 類別標籤橫向滑動 */
+        .category-tabs {
+            display: flex;
+            overflow-x: auto;
+            gap: 8px;
+            padding: 12px 16px;
+            background: white;
+            border-bottom: 1px solid #f3f4f6;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .tab-btn {
+            white-space: nowrap;
+            padding: 6px 14px;
+            border-radius: 999px;
+            background: #f3f4f6;
+            color: #4b5563;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }
+        .tab-btn.active {
+            background: #2563eb;
+            color: white;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body class="text-gray-800 antialiased">
+
+    <div class="app-container flex flex-col">
+        
+        <!-- 頂部標題列 -->
+        <header class="bg-white px-6 py-4 border-b border-gray-100 z-10 flex justify-between items-center shrink-0">
+            <h1 id="headerTitle" class="text-xl font-bold tracking-wide text-gray-900">新增靈感</h1>
+            <button id="refreshBtn" class="hidden text-gray-400 hover:text-blue-500 transition-colors p-2 -mr-2">
+                <i class="ph ph-arrows-clockwise text-2xl"></i>
+            </button>
+            <i id="headerIcon" class="ph ph-sparkle text-2xl text-blue-500"></i>
+        </header>
+
+        <main id="mainContent">
+            
+            <!-- ================= VIEW: 新增表單 (Add) ================= -->
+            <section id="view-add" class="view-section active px-6 py-6 space-y-6">
+                <!-- 1. 分類選擇 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-500 mb-2">選擇分類 (Drive 資料夾)</label>
+                    <div class="relative">
+                        <select id="category" class="w-full bg-white border border-gray-200 text-gray-900 rounded-xl px-4 py-3 appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-base shadow-sm">
+                            <option value="📂 其他">📂 其他未分類</option>
+                        </select>
+                        <i class="ph ph-caret-down absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none"></i>
+                    </div>
+                </div>
+
+                <!-- 2. 文字內容 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-500 mb-2">內容描述或筆記</label>
+                    <textarea id="content" rows="4" placeholder="今天看到了什麼有趣的點子？" class="w-full bg-white border border-gray-200 text-gray-900 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-base resize-none shadow-sm"></textarea>
+                </div>
+
+                <!-- 3. 來源連結 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-500 mb-2">來源連結 (選填)</label>
+                    <div class="relative shadow-sm rounded-xl">
+                        <i class="ph ph-link absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg"></i>
+                        <input type="url" id="url" placeholder="貼上 FB 或網站網址..." class="w-full bg-white border border-gray-200 text-gray-900 rounded-xl pl-12 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-base">
+                    </div>
+                </div>
+
+                <!-- 4. 圖片上傳區塊 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-500 mb-2">上傳截圖 (多張/選填)</label>
+                    <input type="file" id="imageInput" accept="image/*" multiple class="hidden">
+                    <button type="button" onclick="document.getElementById('imageInput').click()" class="w-full border-2 border-dashed border-gray-300 rounded-xl py-6 flex flex-col items-center justify-center text-gray-500 hover:bg-blue-50 hover:border-blue-400 transition-all cursor-pointer bg-white">
+                        <i class="ph ph-image text-3xl mb-2 text-gray-400"></i>
+                        <span class="text-sm">點擊上傳截圖 (自動壓縮)</span>
+                    </button>
+                    <div id="previewContainer" class="preview-scroll mt-4 hidden"></div>
+                    
+                    <!-- 新增 AI 分析按鈕 -->
+                    <button id="aiAnalyzeBtn" type="button" class="hidden w-full mt-3 bg-purple-50 text-purple-600 border border-purple-200 rounded-xl py-3 flex items-center justify-center space-x-2 text-sm font-medium hover:bg-purple-100 transition-all active:scale-95">
+                        <i class="ph ph-magic-wand text-lg"></i>
+                        <span>AI 提取文字與摘要</span>
+                    </button>
+                    <p id="aiMsg" class="text-center text-xs font-medium mt-2 hidden"></p>
+                </div>
+
+                <!-- 送出按鈕 -->
+                <button id="submitBtn" class="w-full bg-blue-600 text-white font-semibold rounded-xl py-4 mt-4 flex items-center justify-center space-x-2 active:scale-95 transition-all shadow-lg shadow-blue-200">
+                    <i class="ph ph-paper-plane-right text-xl"></i>
+                    <span>儲存至雲端</span>
+                </button>
+                <p id="statusMsg" class="text-center text-sm font-medium mt-2 hidden"></p>
+            </section>
+
+            <!-- ================= VIEW: 靈感庫 (Library) ================= -->
+            <section id="view-library" class="view-section relative">
+                <!-- 橫向分類 Tab -->
+                <div class="category-tabs" id="libraryTabs">
+                    <button class="tab-btn active" onclick="filterLibrary('全部')">全部</button>
+                    <button class="tab-btn" onclick="filterLibrary('📂 其他')">其他</button>
+                </div>
+                
+                <!-- Loading 骨架屏 / 提示 -->
+                <div id="libraryLoading" class="flex flex-col items-center justify-center py-20 text-gray-400">
+                    <i class="ph ph-spinner animate-spin text-4xl mb-4 text-blue-500"></i>
+                    <p>正在從 Google Sheets 載入資料...</p>
+                </div>
+
+                <!-- 卡片列表容器 -->
+                <div id="libraryContainer" class="p-4 space-y-4">
+                    <!-- 卡片將由 JS 動態生成 -->
+                </div>
+            </section>
+
+            <!-- ================= VIEW: 搜尋 (Search) ================= -->
+            <section id="view-search" class="view-section px-4 py-4">
+                <div class="relative mb-6 sticky top-4 z-10">
+                    <i class="ph ph-magnifying-glass absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-xl"></i>
+                    <input type="text" id="searchInput" placeholder="搜尋內容、分類或網址..." class="w-full bg-white border border-gray-200 text-gray-900 rounded-2xl pl-12 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm text-base">
+                </div>
+                
+                <div id="searchContainer" class="space-y-4">
+                    <div class="text-center py-20 text-gray-400">
+                        <i class="ph ph-magnifying-glass text-4xl mb-4 opacity-50"></i>
+                        <p>輸入關鍵字開始搜尋</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ================= VIEW: 設定 (Settings) ================= -->
+            <section id="view-settings" class="view-section px-6 py-6 space-y-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-500 mb-2">Gemini API Key</label>
+                    <div class="relative shadow-sm rounded-xl mb-2">
+                        <i class="ph ph-key absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg"></i>
+                        <input type="password" id="geminiApiKey" placeholder="輸入您的 Gemini API Key..." class="w-full bg-white border border-gray-200 text-gray-900 rounded-xl pl-12 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-base">
+                    </div>
+                    <p class="text-xs text-gray-500 leading-relaxed">取得您的免費 API Key，請前往 <a href="https://aistudio.google.com/" target="_blank" class="text-blue-500 underline">Google AI Studio</a>。金鑰僅儲存於您的設備本地 (localStorage)，不會上傳至伺服器。</p>
+                </div>
+                <button id="saveSettingsBtn" class="w-full bg-gray-800 text-white font-semibold rounded-xl py-4 flex items-center justify-center space-x-2 active:scale-95 transition-all shadow-lg">
+                    <i class="ph ph-floppy-disk text-xl"></i>
+                    <span>儲存設定</span>
+                </button>
+                <p id="settingsMsg" class="text-center text-sm font-medium mt-2 hidden"></p>
+            </section>
+
+        </main>
+
+        <!-- 底部導覽列 -->
+        <nav class="fixed bottom-0 w-full max-w-[480px] bg-white border-t border-gray-100 flex justify-around items-center pb-safe pt-2 px-2 z-20 shrink-0" style="padding-bottom: max(env(safe-area-inset-bottom), 12px);">
+            <div class="nav-item active flex flex-col items-center p-2 text-gray-400 cursor-pointer" onclick="switchView('add', this)">
+                <i class="ph ph-plus-circle text-2xl mb-1"></i>
+                <span class="text-[10px] font-medium">新增</span>
+            </div>
+            <div class="nav-item flex flex-col items-center p-2 text-gray-400 cursor-pointer" onclick="switchView('library', this)">
+                <i class="ph ph-cards text-2xl mb-1"></i>
+                <span class="text-[10px] font-medium">靈感庫</span>
+            </div>
+            <div class="nav-item flex flex-col items-center p-2 text-gray-400 cursor-pointer" onclick="switchView('search', this)">
+                <i class="ph ph-magnifying-glass text-2xl mb-1"></i>
+                <span class="text-[10px] font-medium">搜尋</span>
+            </div>
+            <div class="nav-item flex flex-col items-center p-2 text-gray-400 cursor-pointer" onclick="switchView('settings', this)">
+                <i class="ph ph-gear text-2xl mb-1"></i>
+                <span class="text-[10px] font-medium">設定</span>
+            </div>
+        </nav>
+    </div>
+
+    <script>
+        // ==========================================
+        // ⚠️ 第 1 步：請將這裡換成你剛才部署 GAS 取得的網址
+        // ==========================================
+        const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbw5AzznTkJak4avz_8o__QlISZWy8D64Z8OMJuHBKv0nOsa2AJWvfLJUzSNUtf5YxhzVQ/exec'; 
+
+        // 全域變數
+        let allIdeas = []; // 快取從 GAS 載入的資料
+        let isDataLoaded = false;
+        let currentCategory = '全部';
+        
+        // 預設分類 (當 Sheet 沒有資料時的預設值)
+        let dynamicCategories = ['📂 其他'];
+
+        // App 啟動時，在背景自動載入資料以提取最新分類
+        window.addEventListener('DOMContentLoaded', () => {
+            fetchLibraryData(true); 
+        });
+
+        // ==========================================
+        // PWA 動態安裝設定 (免外部檔案)
+        // ==========================================
+        function setupPWA() {
+            const manifestJSON = {
+                "name": "靈感收集庫",
+                "short_name": "IdeaApp",
+                "start_url": ".",
+                "display": "standalone",
+                "background_color": "#ffffff",
+                "theme_color": "#2563eb",
+                "icons": [{
+                    "src": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Google_Keep_icon_%282020%29.svg/512px-Google_Keep_icon_%282020%29.svg.png",
+                    "sizes": "512x512",
+                    "type": "image/png"
+                }]
+            };
+            const manifestBlob = new Blob([JSON.stringify(manifestJSON)], {type: 'application/json'});
+            const manifestURL = URL.createObjectURL(manifestBlob);
+            document.querySelector('head').insertAdjacentHTML('beforeend', `<link rel="manifest" href="${manifestURL}">`);
+        }
+        setupPWA();
+
+        // ==========================================
+        // UI 視圖切換邏輯
+        // ==========================================
+        function switchView(viewName, navElement) {
+            // 隱藏所有視圖
+            document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+            // 移除導覽列 active 狀態
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            
+            // 顯示目標視圖與啟動導覽列按鈕
+            document.getElementById(`view-${viewName}`).classList.add('active');
+            navElement.classList.add('active');
+
+            // 調整頂部 Header
+            const headerTitle = document.getElementById('headerTitle');
+            const headerIcon = document.getElementById('headerIcon');
+            const refreshBtn = document.getElementById('refreshBtn');
+
+            if (viewName === 'add') {
+                headerTitle.innerText = '新增靈感';
+                headerIcon.className = 'ph ph-sparkle text-2xl text-blue-500';
+                headerIcon.style.display = 'block';
+                refreshBtn.style.display = 'none';
+            } else if (viewName === 'library') {
+                headerTitle.innerText = '我的靈感庫';
+                headerIcon.style.display = 'none';
+                refreshBtn.style.display = 'block';
+                // 如果切換到 Library 時還沒載入過資料，自動觸發載入
+                if (!isDataLoaded) fetchLibraryData();
+            } else if (viewName === 'search') {
+                headerTitle.innerText = '搜尋';
+                headerIcon.className = 'ph ph-magnifying-glass text-2xl text-blue-500';
+                headerIcon.style.display = 'block';
+                refreshBtn.style.display = 'none';
+                if (!isDataLoaded) fetchLibraryData();
+            } else if (viewName === 'settings') {
+                headerTitle.innerText = '設定';
+                headerIcon.className = 'ph ph-gear text-2xl text-gray-500';
+                headerIcon.style.display = 'block';
+                refreshBtn.style.display = 'none';
+                // 進入設定頁時自動讀取本地儲存的金鑰
+                document.getElementById('geminiApiKey').value = localStorage.getItem('geminiApiKey') || '';
+            }
+            
+            // 滾動到頂部
+            document.getElementById('mainContent').scrollTop = 0;
+        }
+
+        // ==========================================
+        // 新增靈感表單邏輯 (壓縮與上傳)
+        // ==========================================
+        const imageInput = document.getElementById('imageInput');
+        const previewContainer = document.getElementById('previewContainer');
+        const submitBtn = document.getElementById('submitBtn');
+        const statusMsg = document.getElementById('statusMsg');
+        const aiAnalyzeBtn = document.getElementById('aiAnalyzeBtn');
+        const aiMsg = document.getElementById('aiMsg');
+        let base64ImagesArray = [];
+
+        imageInput.addEventListener('change', async function(e) {
+            const files = e.target.files;
+            if (files.length === 0) return;
+            previewContainer.innerHTML = '';
+            base64ImagesArray = [];
+            previewContainer.classList.remove('hidden');
+            aiAnalyzeBtn.classList.remove('hidden');
+            aiMsg.classList.add('hidden');
+
+            for (let i = 0; i < files.length; i++) {
+                const base64Data = await compressImage(files[i]);
+                base64ImagesArray.push(base64Data);
+                const imgElement = document.createElement('img');
+                imgElement.src = base64Data;
+                imgElement.className = 'w-24 h-24 object-cover rounded-lg border border-gray-200 shadow-sm preview-item';
+                previewContainer.appendChild(imgElement);
+            }
+        });
+
+        function compressImage(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.src = event.target.result;
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 1080;
+                        let width = img.width;
+                        let height = img.height;
+                        if (width > MAX_WIDTH) {
+                            height *= MAX_WIDTH / width;
+                            width = MAX_WIDTH;
+                        }
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        resolve(canvas.toDataURL('image/jpeg', 0.8));
+                    };
+                };
+            });
+        }
+
+        submitBtn.addEventListener('click', async () => {
+            const category = document.getElementById('category').value;
+            const content = document.getElementById('content').value;
+            const url = document.getElementById('url').value;
+
+            if (!content && !url && base64ImagesArray.length === 0) {
+                showMessage('請至少輸入文字、連結或上傳圖片！', 'text-red-500');
+                return;
+            }
+
+            const payload = { category, content, url, images: base64ImagesArray };
+            const originalBtnText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="ph ph-spinner animate-spin text-xl"></i><span>上傳中...</span>';
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-70');
+
+            try {
+                const response = await fetch(GAS_WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(payload),
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                });
+                const result = await response.json();
+                if (result.status === 'success') {
+                    // 清空表單
+                    document.getElementById('content').value = '';
+                    document.getElementById('url').value = '';
+                    document.getElementById('imageInput').value = '';
+                    previewContainer.innerHTML = '';
+                    previewContainer.classList.add('hidden');
+                    aiAnalyzeBtn.classList.add('hidden');
+                    aiMsg.classList.add('hidden');
+                    base64ImagesArray = [];
+                    showMessage('✅ 儲存成功！', 'text-green-600');
+                    // 標記需要重新整理資料庫
+                    isDataLoaded = false; 
+                } else {
+                    showMessage('❌ 失敗：' + result.message, 'text-red-500');
+                }
+            } catch (error) {
+                showMessage('❌ 網路錯誤，請檢查網址', 'text-red-500');
+            } finally {
+                submitBtn.innerHTML = originalBtnText;
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('opacity-70');
+                setTimeout(() => statusMsg.classList.add('hidden'), 4000);
+            }
+        });
+
+        function showMessage(msg, colorClass) {
+            statusMsg.textContent = msg;
+            statusMsg.className = `text-center text-sm font-medium mt-3 ${colorClass}`;
+            statusMsg.classList.remove('hidden');
+        }
+
+        // ==========================================
+        // Gemini AI 圖片分析邏輯
+        // ==========================================
+        aiAnalyzeBtn.addEventListener('click', async () => {
+            const apiKey = localStorage.getItem('geminiApiKey');
+            if (!apiKey) {
+                aiMsg.textContent = '⚠️ 請先前往「設定」分頁輸入 Gemini API Key';
+                aiMsg.className = 'text-center text-xs font-medium mt-2 text-red-500';
+                aiMsg.classList.remove('hidden');
+                return;
+            }
+
+            const originalHtml = aiAnalyzeBtn.innerHTML;
+            aiAnalyzeBtn.innerHTML = '<i class="ph ph-spinner animate-spin text-lg"></i><span>AI 分析中...</span>';
+            aiAnalyzeBtn.disabled = true;
+            aiAnalyzeBtn.classList.add('opacity-70');
+            aiMsg.classList.add('hidden');
+
+            try {
+                // 建立傳送給 Gemini 的 prompt
+                const parts = [
+                    { text: "請提取這張/這些圖片中的所有文字，並提供一個簡短的重點摘要。請用條理清晰的格式輸出。" }
+                ];
+
+                // 將選取的壓縮後圖片 Base64 附加進 API 請求
+                base64ImagesArray.forEach(base64 => {
+                    // 必須移除 "data:image/jpeg;base64," 前綴
+                    const base64Data = base64.split(',')[1];
+                    parts.push({
+                        inlineData: {
+                            mimeType: "image/jpeg",
+                            data: base64Data
+                        }
+                    });
+                });
+
+                // 呼叫 Gemini Flash 模型 (支援圖片理解)
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ role: "user", parts: parts }]
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.error) {
+                    throw new Error(result.error.message);
+                }
+
+                const generatedText = result.candidates[0].content.parts[0].text;
+                
+                // 將 AI 生成的文字附加到內容描述框
+                const contentField = document.getElementById('content');
+                const prefix = contentField.value.trim() ? contentField.value + '\n\n' : '';
+                contentField.value = prefix + '【🤖 AI 文字提取與摘要】\n' + generatedText;
+
+                // 根據新文字高度自動調整 textarea 高度
+                contentField.style.height = 'auto';
+                contentField.style.height = (contentField.scrollHeight) + 'px';
+
+                aiMsg.textContent = '✨ AI 分析完成！內容已自動填寫。';
+                aiMsg.className = 'text-center text-xs font-medium mt-2 text-green-600';
+                aiMsg.classList.remove('hidden');
+
+            } catch (error) {
+                aiMsg.textContent = '❌ AI 分析失敗：' + error.message;
+                aiMsg.className = 'text-center text-xs font-medium mt-2 text-red-500';
+                aiMsg.classList.remove('hidden');
+                console.error(error);
+            } finally {
+                aiAnalyzeBtn.innerHTML = originalHtml;
+                aiAnalyzeBtn.disabled = false;
+                aiAnalyzeBtn.classList.remove('opacity-70');
+            }
+        });
+
+        // ==========================================
+        // 設定頁面邏輯
+        // ==========================================
+        document.getElementById('saveSettingsBtn').addEventListener('click', () => {
+            const apiKey = document.getElementById('geminiApiKey').value.trim();
+            localStorage.setItem('geminiApiKey', apiKey);
+            
+            const msgEl = document.getElementById('settingsMsg');
+            msgEl.textContent = '✅ 設定已安全儲存於本地設備！';
+            msgEl.className = 'text-center text-sm font-medium mt-2 text-green-600';
+            msgEl.classList.remove('hidden');
+            
+            setTimeout(() => {
+                msgEl.classList.add('hidden');
+            }, 3000);
+        });
+
+        // ==========================================
+        // 載入與渲染靈感庫 (Library)
+        // ==========================================
+        document.getElementById('refreshBtn').addEventListener('click', () => fetchLibraryData(false));
+
+        async function fetchLibraryData(isBackground = false) {
+            const container = document.getElementById('libraryContainer');
+            const loading = document.getElementById('libraryLoading');
+            
+            if (!isBackground) {
+                container.innerHTML = '';
+                loading.style.display = 'flex';
+                document.getElementById('refreshBtn').querySelector('i').classList.add('animate-spin');
+            }
+
+            try {
+                const response = await fetch(GAS_WEB_APP_URL);
+                allIdeas = await response.json();
+                isDataLoaded = true;
+                
+                // --- 自動從 Google Sheet 提取並更新分類 ---
+                extractCategoriesFromData();
+                
+                if (!isBackground) {
+                    filterLibrary(currentCategory); // 重新應用當前的過濾
+                }
+            } catch (error) {
+                if (!isBackground) {
+                    container.innerHTML = '<div class="text-center text-red-500 py-10">載入失敗，請檢查網路或 GAS 網址設定。</div>';
+                }
+            } finally {
+                if (!isBackground) {
+                    loading.style.display = 'none';
+                    document.getElementById('refreshBtn').querySelector('i').classList.remove('animate-spin');
+                }
+            }
+        }
+
+        // --- 新增：從資料中提取所有不重複的分類 ---
+        function extractCategoriesFromData() {
+            // 從所有資料中找出不重複的分類
+            const fetchedCategories = [...new Set(allIdeas.map(idea => idea['分類']))].filter(Boolean);
+            
+            // 將試算表中的分類與預設分類合併，並確保不重複
+            dynamicCategories = [...new Set([...fetchedCategories, ...dynamicCategories])];
+            
+            updateCategoryUI();
+        }
+
+        // --- 新增：更新 UI 上的選單與標籤 ---
+        function updateCategoryUI() {
+            // 1. 更新新增頁面的下拉選單
+            const selectEl = document.getElementById('category');
+            const currentSelected = selectEl.value;
+            selectEl.innerHTML = '';
+            dynamicCategories.forEach(cat => {
+                selectEl.innerHTML += `<option value="${cat}">${cat}</option>`;
+            });
+            // 恢復原本選取的項目（如果有的話）
+            if (dynamicCategories.includes(currentSelected)) {
+                selectEl.value = currentSelected;
+            }
+
+            // 2. 更新靈感庫的橫向分類 Tab
+            const tabsEl = document.getElementById('libraryTabs');
+            let tabsHtml = `<button class="tab-btn ${currentCategory === '全部' ? 'active' : ''}" onclick="filterLibrary('全部')">全部</button>`;
+            
+            dynamicCategories.forEach(cat => {
+                // 自動移除前面的 Emoji 或符號，讓 Tab 按鈕看起來更簡潔 (例如 "💡 介面設計" 會變成 "介面設計")
+                const shortName = cat.replace(/^[^a-zA-Z0-9\u4e00-\u9fa5]+/, '').trim() || cat;
+                const isActive = currentCategory === cat ? 'active' : '';
+                tabsHtml += `<button class="tab-btn ${isActive}" onclick="filterLibrary('${cat}')">${shortName}</button>`;
+            });
+            tabsEl.innerHTML = tabsHtml;
+        }
+
+        // 點擊分類標籤過濾
+        function filterLibrary(categoryName) {
+            currentCategory = categoryName;
+            
+            // 更新 Tab UI 樣式 (改用精確比對 function 內容)
+            document.querySelectorAll('#libraryTabs .tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.getAttribute('onclick') === `filterLibrary('${categoryName}')`) {
+                    btn.classList.add('active');
+                    btn.scrollIntoView({behavior: "smooth", block: "nearest", inline: "center"});
+                }
+            });
+
+            // 過濾資料
+            let filteredData = allIdeas;
+            if (categoryName !== '全部') {
+                filteredData = allIdeas.filter(idea => idea['分類'] === categoryName);
+            }
+            
+            renderCards(filteredData, 'libraryContainer');
+        }
+
+        // 搜尋邏輯
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            const keyword = e.target.value.toLowerCase();
+            if (!keyword) {
+                document.getElementById('searchContainer').innerHTML = `
+                    <div class="text-center py-20 text-gray-400">
+                        <i class="ph ph-magnifying-glass text-4xl mb-4 opacity-50"></i>
+                        <p>輸入關鍵字開始搜尋</p>
+                    </div>`;
+                return;
+            }
+
+            const results = allIdeas.filter(idea => {
+                return (idea['內容描述'] || '').toLowerCase().includes(keyword) ||
+                       (idea['來源連結'] || '').toLowerCase().includes(keyword) ||
+                       (idea['分類'] || '').toLowerCase().includes(keyword);
+            });
+            renderCards(results, 'searchContainer');
+        });
+
+        // 通用的卡片渲染函數
+        function renderCards(dataArray, targetContainerId) {
+            const container = document.getElementById(targetContainerId);
+            container.innerHTML = '';
+
+            if (dataArray.length === 0) {
+                container.innerHTML = `<div class="text-center py-20 text-gray-400"><i class="ph ph-empty text-4xl mb-2"></i><p>沒有找到相關紀錄</p></div>`;
+                return;
+            }
+
+            dataArray.forEach(idea => {
+                // 處理卡片內的圖片 (可能有換行符號或逗號分隔)
+                let imageHtml = '';
+                if (idea['圖片連結']) {
+                    const urls = idea['圖片連結'].split(/[\n,]/).filter(u => u.trim() !== '');
+                    if (urls.length > 0) {
+                        imageHtml = `<div class="card-image-gallery">`;
+                        urls.forEach(url => {
+                            // 加上 loading="lazy" 延遲載入以優化效能
+                            imageHtml += `<img src="${url.trim()}" loading="lazy" alt="Idea Image" onclick="window.open(this.src)">`;
+                        });
+                        imageHtml += `</div>`;
+                    }
+                }
+
+                // 處理連結按鈕
+                let linkHtml = '';
+                if (idea['來源連結']) {
+                    let displayUrl = idea['來源連結'];
+                    try { displayUrl = new URL(displayUrl).hostname; } catch(e){}
+                    linkHtml = `
+                        <a href="${idea['來源連結']}" target="_blank" class="inline-flex items-center space-x-1 mt-3 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-sm font-medium hover:bg-blue-100 transition-colors">
+                            <i class="ph ph-link"></i>
+                            <span class="truncate max-w-[200px]">${displayUrl}</span>
+                        </a>`;
+                }
+
+                const cardHTML = `
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="inline-block px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-md font-medium">${idea['分類']}</span>
+                            <span class="text-gray-400 text-xs">${idea['時間']}</span>
+                        </div>
+                        ${idea['內容描述'] ? `<p class="text-gray-800 whitespace-pre-wrap mt-2 text-sm leading-relaxed">${idea['內容描述']}</p>` : ''}
+                        ${imageHtml}
+                        ${linkHtml}
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', cardHTML);
+            });
+        }
+    </script>
+</body>
+</html>
