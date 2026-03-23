@@ -2,13 +2,114 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
+    <!-- PWA 相關設定 (iOS 支援) -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="IdeaApp">
+    <link rel="apple-touch-icon" href="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Google_Keep_icon_%282020%29.svg/512px-Google_Keep_icon_%282020%29.svg.png">
+    
     <title>靈感收集器</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
     <style>
+        body {
+            background-color: #e5e7eb; /* 桌面端背景色 */
+            -webkit-tap-highlight-color: transparent;
+            overscroll-behavior-y: none; /* 防止 iOS 橡皮筋下拉效果 */
+        }
+        
+        /* 模擬手機 App 容器 */
+        .app-container {
+            max-width: 480px;
+            margin: 0 auto;
+            height: 100vh;
+            background-color: #f9fafb;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        main {
+            flex: 1;
+            overflow-y: auto;
+            padding-bottom: 90px; /* 留給 Bottom Nav 的空間 */
+        }
+        
         /* 隱藏捲軸但保持可捲動 */
-        .no-scrollbar::-webkit-scrollbar { display: none; }
+        ::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* 視圖切換 */
+        .view-section { display: none; }
+        .view-section.active { display: block; }
+        
+        /* 底部導覽列狀態 */
+        .nav-item.active { color: #2563eb; }
+        .nav-item.active i { font-weight: bold; }
+        
+        /* 圖片橫向預覽/展示區 */
+        .preview-scroll {
+            display: flex;
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            gap: 12px;
+            padding-bottom: 8px;
+        }
+        .preview-item {
+            scroll-snap-align: start;
+            flex: 0 0 auto;
+        }
+        
+        .card-image-gallery {
+            display: flex;
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .card-image-gallery img {
+            scroll-snap-align: start;
+            border-radius: 8px;
+            height: 160px;
+            width: auto;
+            max-width: 90%;
+            object-fit: cover;
+            border: 1px solid #e5e7eb;
+        }
+        
+        /* 橫向分類 Tab */
+        .category-tabs {
+            display: flex;
+            overflow-x: auto;
+            gap: 8px;
+            padding: 12px 16px;
+            background: white;
+            border-bottom: 1px solid #f3f4f6;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .tab-btn {
+            white-space: nowrap;
+            padding: 6px 14px;
+            border-radius: 999px;
+            background: #f3f4f6;
+            color: #4b5563;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }
+        .tab-btn.active {
+            background: #2563eb;
+            color: white;
+            font-weight: bold;
+        }
+
+        /* 讀取動畫 */
         .loader {
             border: 4px solid #f3f3f3;
             border-top: 4px solid #3b82f6;
@@ -18,7 +119,8 @@
             animation: spin 1s linear infinite;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        /* 文字截斷 (預覽用) */
+        
+        /* 截斷文字 */
         .line-clamp-3 {
             display: -webkit-box;
             -webkit-line-clamp: 3;
@@ -27,466 +129,631 @@
         }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen font-sans text-gray-800">
+<body class="text-gray-800 antialiased font-sans">
 
     <!-- ⚠️ 請將這裡替換成您最新部署的 Google Apps Script Web App URL -->
     <script>
-        const GAS_URL = "https://script.google.com/macros/s/AKfycbyiFZ3PEe7yqCXmqVJ_nj9oE_NJhocPBrMpcEBy_wLqXYMOarVcsnmtpNtrBCN6yBuBVA/exec"; 
+        const GAS_URL = "YOUR_GAS_WEB_APP_URL"; 
     </script>
 
-    <!-- 頂部導覽列 -->
-    <header class="bg-white shadow-sm sticky top-0 z-40">
-        <div class="max-w-3xl mx-auto px-4 py-3 flex justify-between items-center">
-            <h1 class="text-xl font-bold text-blue-600 flex items-center gap-2">
-                💡 靈感收集器
-            </h1>
-            <nav class="flex gap-2">
-                <button onclick="switchTab('add')" id="nav-add" class="px-3 py-2 rounded-md font-medium bg-blue-100 text-blue-700 transition-colors">新增</button>
-                <button onclick="switchTab('library')" id="nav-library" class="px-3 py-2 rounded-md font-medium text-gray-600 hover:bg-gray-100 transition-colors">靈感庫</button>
-            </nav>
-        </div>
-    </header>
-
-    <main class="max-w-3xl mx-auto px-4 py-6">
+    <div class="app-container">
         
-        <!-- ==================== 分頁 1: 新增靈感 ==================== -->
-        <section id="tab-add" class="block space-y-5">
-            <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
-                <h2 class="text-lg font-bold mb-4 border-b pb-2">新增一筆靈感</h2>
+        <!-- ================= 頂部標題列 ================= -->
+        <header class="bg-white px-6 py-4 border-b border-gray-100 z-10 flex justify-between items-center shrink-0 shadow-sm">
+            <h1 id="headerTitle" class="text-xl font-bold tracking-wide text-gray-900 flex items-center gap-2">
+                新增靈感
+            </h1>
+            <button id="refreshBtn" class="hidden text-gray-400 hover:text-blue-500 transition-colors p-2 -mr-2" onclick="fetchData()">
+                <i class="ph ph-arrows-clockwise text-2xl"></i>
+            </button>
+            <i id="headerIcon" class="ph ph-sparkle text-2xl text-blue-500"></i>
+        </header>
+
+        <main id="mainContent" class="no-scrollbar">
+            
+            <!-- ================= VIEW 1: 新增表單 (Add) ================= -->
+            <section id="view-add" class="view-section active px-5 py-6 space-y-5">
                 
-                <!-- 分類選擇與新增 -->
-                <div class="mb-4">
-                    <label class="block text-sm font-bold text-gray-700 mb-1">分類</label>
-                    <div class="flex gap-2">
-                        <select id="category-select" class="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50">
+                <!-- 分類選擇 -->
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">分類</label>
+                    <div class="relative shadow-sm rounded-xl">
+                        <select id="add-category" class="w-full bg-white border border-gray-200 text-gray-900 rounded-xl px-4 py-3 appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 text-base font-medium">
                             <option value="未分類">未分類</option>
                         </select>
-                        <button onclick="addNewCategory()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm font-bold">
-                            + 新分類
-                        </button>
+                        <i class="ph ph-caret-down absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none"></i>
                     </div>
                 </div>
 
-                <!-- 內容輸入 -->
-                <div class="mb-4">
-                    <label class="block text-sm font-bold text-gray-700 mb-1">靈感內容</label>
-                    <textarea id="content-input" rows="5" placeholder="寫下您的想法、筆記或文案..." class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50 resize-y"></textarea>
+                <!-- 文字內容 -->
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="block text-sm font-bold text-gray-700">靈感內容</label>
+                    </div>
+                    <textarea id="add-content" rows="4" placeholder="今天看到了什麼有趣的點子？寫下筆記或貼上文案..." class="w-full bg-white border border-gray-200 text-gray-900 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 text-base resize-none shadow-sm"></textarea>
                 </div>
 
                 <!-- 來源連結 -->
-                <div class="mb-4">
-                    <label class="block text-sm font-bold text-gray-700 mb-1">參考連結 (選填)</label>
-                    <input type="url" id="url-input" placeholder="https://..." class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50">
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">來源連結 (選填)</label>
+                    <div class="relative shadow-sm rounded-xl">
+                        <i class="ph ph-link absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg"></i>
+                        <input type="url" id="add-url" placeholder="貼上參考網站網址..." class="w-full bg-white border border-gray-200 text-gray-900 rounded-xl pl-11 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 text-base">
+                    </div>
                 </div>
 
-                <!-- 圖片上傳 -->
-                <div class="mb-6">
-                    <label class="block text-sm font-bold text-gray-700 mb-2">附加圖片</label>
-                    <label for="image-upload" class="inline-flex items-center justify-center px-4 py-2 border-2 border-dashed border-blue-400 text-blue-600 bg-blue-50 rounded-lg cursor-pointer hover:bg-blue-100 transition-colors w-full sm:w-auto font-medium">
-                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-                        點擊選擇圖片上傳
-                    </label>
-                    <input type="file" id="image-upload" multiple accept="image/*" class="hidden" onchange="previewImages(event)">
+                <!-- 圖片上傳區塊 (支援前端壓縮) -->
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">附加截圖 (選填)</label>
+                    <input type="file" id="image-upload" accept="image/*" multiple class="hidden" onchange="handleImageUpload(event)">
+                    <button type="button" onclick="document.getElementById('image-upload').click()" class="w-full border-2 border-dashed border-blue-300 bg-blue-50/50 rounded-xl py-5 flex flex-col items-center justify-center text-blue-600 hover:bg-blue-100 transition-all cursor-pointer">
+                        <i class="ph ph-image text-3xl mb-1"></i>
+                        <span class="text-sm font-bold">點擊上傳圖片 (自動壓縮)</span>
+                    </button>
+                    <!-- 圖片預覽 -->
+                    <div id="add-preview-container" class="preview-scroll mt-3 hidden"></div>
                     
-                    <!-- 圖片預覽區 -->
-                    <div id="image-preview-container" class="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3 empty:hidden"></div>
+                    <!-- AI 分析按鈕 -->
+                    <button id="ai-btn" type="button" onclick="aiSummarize()" class="w-full mt-3 bg-purple-100 text-purple-700 border border-purple-200 rounded-xl py-3 flex items-center justify-center gap-2 font-bold hover:bg-purple-200 transition-all active:scale-95 shadow-sm">
+                        <i class="ph ph-magic-wand text-lg"></i>
+                        <span>✨ AI 智慧提取 (圖片/文字)</span>
+                    </button>
                 </div>
 
-                <!-- 提交大按鈕 -->
-                <button onclick="submitIdea()" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-blue-700 active:transform active:scale-95 transition-all text-lg">
-                    💾 儲存靈感
+                <!-- 送出按鈕 -->
+                <button id="submit-btn" onclick="submitIdea()" class="w-full bg-blue-600 text-white font-bold rounded-xl py-4 mt-2 flex items-center justify-center gap-2 active:scale-95 transition-all shadow-md hover:bg-blue-700 text-lg">
+                    <i class="ph ph-paper-plane-right text-xl"></i>
+                    <span>儲存靈感</span>
                 </button>
-            </div>
-        </section>
+            </section>
 
-        <!-- ==================== 分頁 2: 靈感庫 (預覽動態牆) ==================== -->
-        <section id="tab-library" class="hidden space-y-6">
-            <!-- 篩選列 -->
-            <div class="flex gap-2 overflow-x-auto py-2 no-scrollbar" id="filter-container">
-                <button class="px-4 py-1.5 rounded-full bg-gray-800 text-white text-sm font-medium whitespace-nowrap filter-btn" data-cat="all" onclick="filterIdeas('all')">全部</button>
-            </div>
-
-            <!-- 靈感列表 -->
-            <div id="ideas-list" class="flex flex-col gap-5">
-                <div class="text-center text-gray-500 py-10">載入中，請稍候...</div>
-            </div>
-        </section>
-
-    </main>
-
-    <!-- ==================== 瀏覽完整內容 Modal (新加入) ==================== -->
-    <div id="view-modal" class="fixed inset-0 bg-black/70 hidden z-50 flex justify-center items-center p-4">
-        <div class="bg-white w-full max-w-2xl max-h-[90vh] rounded-xl shadow-2xl flex flex-col transform transition-all">
-            <!-- 頂部資訊與關閉按鈕 -->
-            <div class="p-4 border-b flex justify-between items-center bg-white rounded-t-xl z-10 shrink-0">
-                <div class="flex items-center gap-3">
-                    <span id="view-category" class="px-2.5 py-1 bg-gray-100 text-gray-700 text-sm font-bold rounded-md"></span>
-                    <span id="view-time" class="text-sm text-gray-400"></span>
+            <!-- ================= VIEW 2: 靈感庫 (Library) ================= -->
+            <section id="view-library" class="view-section relative bg-gray-50 min-h-full">
+                <!-- 橫向分類 Tab -->
+                <div class="category-tabs no-scrollbar" id="library-tabs">
+                    <button class="tab-btn active" onclick="filterLibrary('all')">全部</button>
                 </div>
-                <button onclick="closeViewModal()" class="text-gray-400 hover:text-gray-800 p-1 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
-            </div>
-            
-            <!-- 可捲動的內容區 -->
-            <div class="p-5 overflow-y-auto no-scrollbar grow">
-                <p id="view-text" class="text-gray-800 text-base leading-relaxed whitespace-pre-wrap break-words mb-4"></p>
-                <div id="view-images" class="flex flex-col gap-4"></div>
-                <div id="view-link-container" class="mt-5 empty:hidden"></div>
-            </div>
+                
+                <!-- 卡片列表容器 -->
+                <div id="library-container" class="p-4 space-y-4">
+                    <div class="text-center py-20 text-gray-400 flex flex-col items-center">
+                        <div class="loader mb-4 border-gray-300 border-top-gray-400"></div>
+                        <p>載入中，請稍候...</p>
+                    </div>
+                </div>
+            </section>
 
-            <!-- 底部操作列 -->
-            <div class="p-4 border-t bg-gray-50 rounded-b-xl flex justify-end gap-3 shrink-0">
-                <button onclick="closeViewModal()" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-medium">關閉</button>
-                <button id="view-edit-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold flex items-center gap-1">
-                    ✏️ 編輯
-                </button>
+            <!-- ================= VIEW 3: 搜尋 (Search) ================= -->
+            <section id="view-search" class="view-section px-4 py-4 bg-gray-50 min-h-full">
+                <div class="relative mb-4 sticky top-4 z-10">
+                    <i class="ph ph-magnifying-glass absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-xl"></i>
+                    <input type="text" id="search-input" placeholder="搜尋內容、分類或網址..." class="w-full bg-white border border-gray-200 text-gray-900 rounded-2xl pl-11 pr-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm text-base">
+                </div>
+                
+                <div id="search-container" class="space-y-4">
+                    <div class="text-center py-20 text-gray-400">
+                        <i class="ph ph-magnifying-glass text-5xl mb-3 opacity-30"></i>
+                        <p class="font-medium">輸入關鍵字開始尋找靈感</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ================= VIEW 4: 設定 (Settings) ================= -->
+            <section id="view-settings" class="view-section px-5 py-6 space-y-6">
+                
+                <!-- 分類管理 -->
+                <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-200">
+                    <h3 class="text-base font-bold text-gray-800 mb-3 flex items-center"><i class="ph ph-folder-plus text-xl mr-2 text-blue-500"></i>分類管理</h3>
+                    <div class="flex space-x-2">
+                        <input type="text" id="new-category-input" placeholder="例如：✈️ 旅遊規劃" class="flex-1 bg-gray-50 border border-gray-200 text-gray-900 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                        <button onclick="addNewCategory()" class="bg-blue-100 text-blue-700 px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-blue-200 transition-colors shrink-0">新增</button>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-3 leading-relaxed">新增的分類會同步到 Google Sheet，並出現在您的標籤列中。</p>
+                </div>
+
+                <!-- API Key 設定 -->
+                <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-200">
+                    <h3 class="text-base font-bold text-gray-800 mb-3 flex items-center"><i class="ph ph-key text-xl mr-2 text-purple-500"></i>Gemini API Key</h3>
+                    <div class="relative mb-2">
+                        <input type="password" id="api-key-input" placeholder="輸入您的 API Key..." class="w-full bg-gray-50 border border-gray-200 text-gray-900 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm">
+                    </div>
+                    <p class="text-xs text-gray-500 leading-relaxed mb-4">
+                        免費取得 API Key 請至 <a href="https://aistudio.google.com/" target="_blank" class="text-blue-500 underline font-medium">Google AI Studio</a>。金鑰僅儲存於您的手機本地端，絕對安全。
+                    </p>
+                    <button onclick="saveSettings()" class="w-full bg-gray-800 text-white font-bold rounded-xl py-3 flex items-center justify-center gap-2 active:scale-95 transition-all shadow-md">
+                        <i class="ph ph-floppy-disk text-lg"></i>
+                        <span>儲存設定</span>
+                    </button>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- ================= 底部導覽列 (Bottom Nav) ================= -->
+        <nav class="bg-white border-t border-gray-200 flex justify-around items-center pb-safe pt-2 px-2 z-20 shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]" style="padding-bottom: max(env(safe-area-inset-bottom), 12px);">
+            <div class="nav-item active flex flex-col items-center p-2 text-gray-400 cursor-pointer transition-colors" onclick="switchView('add', this)">
+                <i class="ph ph-plus-circle text-2xl mb-1"></i>
+                <span class="text-[11px] font-bold">新增</span>
+            </div>
+            <div class="nav-item flex flex-col items-center p-2 text-gray-400 cursor-pointer transition-colors" onclick="switchView('library', this)">
+                <i class="ph ph-cards text-2xl mb-1"></i>
+                <span class="text-[11px] font-bold">靈感庫</span>
+            </div>
+            <div class="nav-item flex flex-col items-center p-2 text-gray-400 cursor-pointer transition-colors" onclick="switchView('search', this)">
+                <i class="ph ph-magnifying-glass text-2xl mb-1"></i>
+                <span class="text-[11px] font-bold">搜尋</span>
+            </div>
+            <div class="nav-item flex flex-col items-center p-2 text-gray-400 cursor-pointer transition-colors" onclick="switchView('settings', this)">
+                <i class="ph ph-gear text-2xl mb-1"></i>
+                <span class="text-[11px] font-bold">設定</span>
+            </div>
+        </nav>
+
+        <!-- ==================== 檢視與操作 Modal (疊加在 app-container 上) ==================== -->
+        <div id="view-modal" class="absolute inset-0 bg-black/70 hidden z-50 flex justify-center items-end sm:items-center p-0 sm:p-4 backdrop-blur-sm transition-opacity">
+            <div class="bg-white w-full h-[90vh] sm:h-auto sm:max-h-[85vh] rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col transform transition-transform translate-y-0">
+                <!-- 頂部資訊與關閉 -->
+                <div class="p-4 border-b flex justify-between items-center bg-white rounded-t-2xl z-10 shrink-0">
+                    <div class="flex items-center gap-3">
+                        <span id="view-category" class="px-2.5 py-1 bg-gray-100 text-gray-700 text-xs font-bold rounded-md"></span>
+                        <span id="view-time" class="text-xs text-gray-400 font-medium"></span>
+                    </div>
+                    <button onclick="closeViewModal()" class="text-gray-400 hover:text-gray-800 p-1.5 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors">
+                        <i class="ph ph-x text-lg"></i>
+                    </button>
+                </div>
+                
+                <!-- 內容區 -->
+                <div class="p-5 overflow-y-auto no-scrollbar grow bg-gray-50">
+                    <p id="view-text" class="text-gray-800 text-[15px] leading-relaxed whitespace-pre-wrap break-words mb-5"></p>
+                    <div id="view-images" class="flex flex-col gap-3"></div>
+                    <div id="view-link-container" class="mt-5 empty:hidden"></div>
+                </div>
+
+                <!-- 底部操作列 (編輯/刪除) -->
+                <div class="p-4 border-t bg-white sm:rounded-b-2xl flex justify-between gap-3 shrink-0 pb-safe" style="padding-bottom: max(env(safe-area-inset-bottom), 16px);">
+                    <button id="view-delete-btn" class="px-4 py-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 font-bold flex items-center gap-1 transition-colors">
+                        <i class="ph ph-trash"></i> 刪除
+                    </button>
+                    <div class="flex gap-2">
+                        <button id="view-edit-btn" class="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-bold flex items-center gap-1 shadow-sm transition-all active:scale-95">
+                            <i class="ph ph-pencil-simple"></i> 編輯
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
 
-    <!-- ==================== 編輯 Modal 彈窗 ==================== -->
-    <div id="edit-modal" class="fixed inset-0 bg-black/60 hidden z-[60] flex justify-center items-center p-4">
-        <div class="bg-white w-full max-w-lg rounded-xl shadow-2xl p-5 transform transition-all max-h-[90vh] flex flex-col">
-            <h3 class="text-lg font-bold mb-4 border-b pb-2 shrink-0">編輯靈感</h3>
-            <input type="hidden" id="edit-id"> 
-            
-            <div class="space-y-4 overflow-y-auto no-scrollbar grow py-1">
-                <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-1">分類</label>
-                    <select id="edit-category" class="w-full p-2 border rounded-lg bg-gray-50"></select>
-                </div>
-                <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-1">內容</label>
-                    <textarea id="edit-content" rows="6" class="w-full p-2 border rounded-lg bg-gray-50 resize-y"></textarea>
-                </div>
-                <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-1">連結</label>
-                    <input type="url" id="edit-url" class="w-full p-2 border rounded-lg bg-gray-50">
-                </div>
+        <!-- ==================== 編輯 Modal ==================== -->
+        <div id="edit-modal" class="absolute inset-0 bg-white hidden z-[60] flex-col transition-transform">
+            <div class="px-4 py-3 border-b flex justify-between items-center bg-white shrink-0 shadow-sm">
+                <button onclick="closeEditModal()" class="text-gray-500 hover:text-gray-800 font-bold px-2 py-1">取消</button>
+                <h3 class="text-lg font-bold text-gray-900">編輯靈感</h3>
+                <button onclick="submitEdit()" class="text-blue-600 hover:text-blue-800 font-bold px-2 py-1">儲存</button>
             </div>
-
-            <div class="mt-4 pt-4 border-t flex justify-end gap-3 shrink-0">
-                <button onclick="closeEditModal()" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-medium">取消</button>
-                <button onclick="submitEdit()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold">儲存修改</button>
+            
+            <div class="p-5 overflow-y-auto no-scrollbar grow space-y-5 bg-gray-50">
+                <input type="hidden" id="edit-id"> 
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">分類</label>
+                    <select id="edit-category" class="w-full p-3 border border-gray-200 rounded-xl bg-white shadow-sm font-medium outline-none focus:ring-2 focus:ring-blue-500"></select>
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">內容</label>
+                    <textarea id="edit-content" rows="6" class="w-full p-3 border border-gray-200 rounded-xl bg-white shadow-sm outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">連結</label>
+                    <input type="url" id="edit-url" class="w-full p-3 border border-gray-200 rounded-xl bg-white shadow-sm outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
             </div>
         </div>
-    </div>
 
-    <!-- 全域載入中遮罩 -->
-    <div id="loading-overlay" class="fixed inset-0 bg-white/80 z-[100] hidden flex-col justify-center items-center backdrop-blur-sm">
-        <div class="loader mb-4"></div>
-        <p id="loading-text" class="text-blue-600 font-bold text-lg">處理中，請稍候...</p>
+        <!-- 全域載入中遮罩 -->
+        <div id="loading-overlay" class="absolute inset-0 bg-white/80 z-[100] hidden flex-col justify-center items-center backdrop-blur-sm">
+            <div class="loader mb-4 border-gray-200 border-top-blue-600"></div>
+            <p id="loading-text" class="text-blue-600 font-bold text-lg">處理中...</p>
+        </div>
+
+        <!-- 浮動提示訊息 -->
+        <div id="toast-msg" class="absolute top-20 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-5 py-3 rounded-full shadow-lg font-bold text-sm hidden z-[110] transition-opacity opacity-0 whitespace-nowrap">
+            訊息內容
+        </div>
     </div>
 
     <script>
+        // ==========================================
+        // 初始化與全域變數
+        // ==========================================
         let allIdeas = [];
         let allCategories = [];
         let uploadedImagesBase64 = []; 
+        let isDataLoaded = false;
+        let currentFilter = 'all';
 
+        // PWA 動態安裝設定
+        function setupPWA() {
+            const manifestJSON = {
+                "name": "靈感收集器",
+                "short_name": "IdeaApp",
+                "start_url": ".",
+                "display": "standalone",
+                "background_color": "#ffffff",
+                "theme_color": "#2563eb",
+                "icons": [{
+                    "src": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Google_Keep_icon_%282020%29.svg/512px-Google_Keep_icon_%282020%29.svg.png",
+                    "sizes": "512x512",
+                    "type": "image/png"
+                }]
+            };
+            const manifestBlob = new Blob([JSON.stringify(manifestJSON)], {type: 'application/json'});
+            const manifestURL = URL.createObjectURL(manifestBlob);
+            document.querySelector('head').insertAdjacentHTML('beforeend', `<link rel="manifest" href="${manifestURL}">`);
+        }
+        
         window.onload = () => {
+            setupPWA();
+            // 讀取本地設定
+            document.getElementById('api-key-input').value = localStorage.getItem('geminiApiKey') || '';
+            
             if(GAS_URL === "YOUR_GAS_WEB_APP_URL" || GAS_URL === "") {
-                alert("請先在 HTML 原始碼中填寫您的 GAS Web App URL！");
+                showToast("⚠️ 請先在 HTML 中填寫您的 GAS URL！", "bg-red-500");
                 return;
             }
-            fetchData();
+            // 啟動時自動讀取資料
+            fetchData(true); 
+
+            // 搜尋監聽
+            document.getElementById('search-input').addEventListener('input', (e) => {
+                searchIdeas(e.target.value.toLowerCase());
+            });
         };
 
-        function switchTab(tab) {
-            document.getElementById('tab-add').style.display = tab === 'add' ? 'block' : 'none';
-            document.getElementById('tab-library').style.display = tab === 'library' ? 'block' : 'none';
+        // ==========================================
+        // UI 切換與輔助工具
+        // ==========================================
+        function switchView(viewName, navElement) {
+            document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
             
-            document.getElementById('nav-add').className = tab === 'add' ? 'px-3 py-2 rounded-md font-medium bg-blue-100 text-blue-700 transition-colors' : 'px-3 py-2 rounded-md font-medium text-gray-600 hover:bg-gray-100 transition-colors';
-            document.getElementById('nav-library').className = tab === 'library' ? 'px-3 py-2 rounded-md font-medium bg-blue-100 text-blue-700 transition-colors' : 'px-3 py-2 rounded-md font-medium text-gray-600 hover:bg-gray-100 transition-colors';
+            document.getElementById(`view-${viewName}`).classList.add('active');
+            navElement.classList.add('active');
+
+            const title = document.getElementById('headerTitle');
+            const icon = document.getElementById('headerIcon');
+            const refreshBtn = document.getElementById('refreshBtn');
+
+            const views = {
+                'add': { title: '新增靈感', icon: 'ph-sparkle text-blue-500', showRefresh: false },
+                'library': { title: '我的靈感庫', icon: 'ph-cards text-blue-500', showRefresh: true },
+                'search': { title: '搜尋靈感', icon: 'ph-magnifying-glass text-blue-500', showRefresh: false },
+                'settings': { title: '系統設定', icon: 'ph-gear text-gray-500', showRefresh: false }
+            };
+
+            title.innerText = views[viewName].title;
+            if (views[viewName].showRefresh) {
+                icon.style.display = 'none';
+                refreshBtn.style.display = 'block';
+                if (!isDataLoaded) fetchData();
+            } else {
+                icon.className = `ph ${views[viewName].icon} text-2xl`;
+                icon.style.display = 'block';
+                refreshBtn.style.display = 'none';
+            }
+            document.getElementById('mainContent').scrollTop = 0;
         }
 
-        function showLoading(text = "載入中...") {
+        function showLoading(text = "處理中...") {
             document.getElementById('loading-text').innerText = text;
             document.getElementById('loading-overlay').style.display = 'flex';
         }
         function hideLoading() {
             document.getElementById('loading-overlay').style.display = 'none';
         }
+        
+        function showToast(msg, bgClass = "bg-gray-800") {
+            const toast = document.getElementById('toast-msg');
+            toast.textContent = msg;
+            toast.className = `absolute top-20 left-1/2 transform -translate-x-1/2 text-white px-5 py-3 rounded-full shadow-lg font-bold text-sm z-[110] transition-opacity whitespace-nowrap ${bgClass}`;
+            toast.style.display = 'block';
+            setTimeout(() => toast.classList.remove('opacity-0'), 10);
+            
+            setTimeout(() => {
+                toast.classList.add('opacity-0');
+                setTimeout(() => toast.style.display = 'none', 300);
+            }, 3000);
+        }
 
         function getDirectImageUrl(driveUrl) {
             if (!driveUrl) return '';
             const match = driveUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
-            if (match && match[1]) {
-                return `https://drive.google.com/uc?export=view&id=${match[1]}`;
-            }
+            if (match && match[1]) return `https://drive.google.com/uc?export=view&id=${match[1]}`;
             return driveUrl;
         }
 
-        async function fetchData() {
-            showLoading("同步資料庫中...");
+        function escapeHTML(str) {
+            return (str || '').toString().replace(/[&<>'"]/g, 
+                tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+            );
+        }
+
+        // ==========================================
+        // 核心資料讀取
+        // ==========================================
+        async function fetchData(isSilent = false) {
+            if (!isSilent) showLoading("同步資料庫中...");
             try {
                 const response = await fetch(GAS_URL);
                 const data = await response.json();
                 
                 allIdeas = data.ideas || [];
-                allCategories = data.categories || [];
+                allCategories = data.categories || ['未分類'];
+                isDataLoaded = true;
                 
                 updateCategoryUI();
-                renderLibrary('all');
+                filterLibrary(currentFilter);
             } catch (error) {
-                console.error("Fetch Error:", error);
-                alert("讀取失敗，請確認 GAS 網址與權限設定是否正確。");
+                console.error(error);
+                if (!isSilent) showToast("讀取失敗，請檢查網路", "bg-red-500");
             } finally {
-                hideLoading();
+                if (!isSilent) hideLoading();
             }
         }
 
         function updateCategoryUI() {
-            const selectAdd = document.getElementById('category-select');
-            const selectEdit = document.getElementById('edit-category');
-            let optionsHTML = '';
-            allCategories.forEach(cat => {
-                optionsHTML += `<option value="${cat}">${cat}</option>`;
-            });
-            selectAdd.innerHTML = optionsHTML || '<option value="未分類">未分類</option>';
-            selectEdit.innerHTML = optionsHTML || '<option value="未分類">未分類</option>';
+            // 更新新增頁面 & 編輯頁面下拉選單
+            const addSelect = document.getElementById('add-category');
+            const editSelect = document.getElementById('edit-category');
+            
+            const currentAdd = addSelect.value;
+            const optionsHtml = allCategories.map(cat => `<option value="${cat}">${cat}</option>`).join('');
+            
+            addSelect.innerHTML = optionsHtml;
+            editSelect.innerHTML = optionsHtml;
+            
+            if (allCategories.includes(currentAdd)) addSelect.value = currentAdd;
 
-            const filterContainer = document.getElementById('filter-container');
-            let filtersHTML = `<button class="px-4 py-1.5 rounded-full bg-gray-800 text-white text-sm font-medium whitespace-nowrap filter-btn" data-cat="all" onclick="filterIdeas('all')">全部</button>`;
+            // 更新靈感庫 Tab
+            const tabsContainer = document.getElementById('library-tabs');
+            let tabsHtml = `<button class="tab-btn ${currentFilter === 'all' ? 'active' : ''}" onclick="filterLibrary('all')">全部</button>`;
             allCategories.forEach(cat => {
-                filtersHTML += `<button class="px-4 py-1.5 rounded-full bg-white border border-gray-300 text-gray-700 text-sm font-medium whitespace-nowrap hover:bg-gray-100 filter-btn" data-cat="${cat}" onclick="filterIdeas('${cat}')">${cat}</button>`;
+                // 簡化 tab 名稱顯示 (移除前面 emoji)
+                const shortName = cat.replace(/^[^a-zA-Z0-9\u4e00-\u9fa5]+/, '').trim() || cat;
+                const activeClass = currentFilter === cat ? 'active' : '';
+                tabsHtml += `<button class="tab-btn ${activeClass}" onclick="filterLibrary('${cat}')">${shortName}</button>`;
             });
-            filterContainer.innerHTML = filtersHTML;
+            tabsContainer.innerHTML = tabsHtml;
         }
 
-        // 優化後的預覽圖片功能
-        function previewImages(event) {
-            const files = event.target.files;
-            const container = document.getElementById('image-preview-container');
+        // ==========================================
+        // 圖片上傳前壓縮 (Client-side Compression)
+        // ==========================================
+        async function handleImageUpload(e) {
+            const files = e.target.files;
+            if (files.length === 0) return;
             
+            const previewContainer = document.getElementById('add-preview-container');
+            previewContainer.innerHTML = '';
+            uploadedImagesBase64 = [];
+            previewContainer.classList.remove('hidden');
+
+            // 壓縮每一張圖片
             for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const base64String = e.target.result;
-                    uploadedImagesBase64.push(base64String);
-                    const currentIndex = uploadedImagesBase64.length - 1;
-                    
-                    const imgDiv = document.createElement('div');
-                    imgDiv.className = "relative aspect-square rounded-lg overflow-hidden border border-gray-200 shadow-sm group";
-                    // 加大紅色刪除按鈕，Hover 時稍微放大
-                    imgDiv.innerHTML = `
-                        <img src="${base64String}" class="w-full h-full object-cover">
-                        <button type="button" class="absolute top-1.5 right-1.5 bg-red-500 text-white rounded-full w-7 h-7 flex items-center justify-center text-sm font-bold shadow-md hover:bg-red-600 hover:scale-110 transition-transform" onclick="removeImage(this, ${currentIndex})">✕</button>
-                    `;
-                    container.appendChild(imgDiv);
-                };
-                reader.readAsDataURL(file);
+                const base64Data = await compressImage(files[i]);
+                uploadedImagesBase64.push(base64Data);
+                
+                const img = document.createElement('img');
+                img.src = base64Data;
+                img.className = 'w-24 h-24 object-cover rounded-xl border border-gray-200 shadow-sm preview-item';
+                previewContainer.appendChild(img);
             }
-            // 每次選完後清空 input 的值，這樣即使刪除圖片後選「同一張」也能順利觸發上傳
-            event.target.value = '';
         }
 
-        function removeImage(btnElement, index) {
-            uploadedImagesBase64[index] = null; 
-            btnElement.parentElement.remove();
+        function compressImage(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.src = event.target.result;
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 1080; // 限制最大寬度
+                        let width = img.width;
+                        let height = img.height;
+                        
+                        if (width > MAX_WIDTH) {
+                            height *= MAX_WIDTH / width;
+                            width = MAX_WIDTH;
+                        }
+                        
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        // 轉換成 JPEG 並設定品質 0.8
+                        resolve(canvas.toDataURL('image/jpeg', 0.8));
+                    };
+                };
+            });
         }
 
+        // ==========================================
+        // 新增靈感
+        // ==========================================
         async function submitIdea() {
-            const category = document.getElementById('category-select').value;
-            const content = document.getElementById('content-input').value;
-            const url = document.getElementById('url-input').value;
-            
-            const finalImages = uploadedImagesBase64.filter(img => img !== null);
+            const category = document.getElementById('add-category').value;
+            const content = document.getElementById('add-content').value;
+            const url = document.getElementById('add-url').value;
 
-            if (!content && finalImages.length === 0 && !url) {
-                alert("請至少輸入內容、連結或上傳圖片喔！");
+            if (!content && !url && uploadedImagesBase64.length === 0) {
+                showToast("請至少輸入內容、連結或上傳圖片！", "bg-red-500");
                 return;
             }
 
-            showLoading("正在儲存並上傳圖片...");
-
-            const payload = {
-                action: 'addIdea',
-                category: category,
-                content: content,
-                url: url,
-                images: finalImages
-            };
+            const btn = document.getElementById('submit-btn');
+            const origHtml = btn.innerHTML;
+            btn.innerHTML = '<i class="ph ph-spinner animate-spin text-xl"></i><span>上傳中...</span>';
+            btn.disabled = true;
 
             try {
                 const response = await fetch(GAS_URL, {
                     method: 'POST',
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify({
+                        action: 'addIdea',
+                        category, content, url,
+                        images: uploadedImagesBase64 // 送出壓縮後的 base64 陣列
+                    })
                 });
                 const result = await response.json();
                 
-                if(result.status === 'success') {
-                    document.getElementById('content-input').value = '';
-                    document.getElementById('url-input').value = '';
+                if (result.status === 'success') {
+                    // 清空表單
+                    document.getElementById('add-content').value = '';
+                    document.getElementById('add-url').value = '';
                     document.getElementById('image-upload').value = '';
-                    document.getElementById('image-preview-container').innerHTML = '';
+                    document.getElementById('add-preview-container').innerHTML = '';
+                    document.getElementById('add-preview-container').classList.add('hidden');
                     uploadedImagesBase64 = [];
                     
-                    await fetchData();
-                    switchTab('library');
+                    showToast("✅ 儲存成功！", "bg-green-600");
+                    isDataLoaded = false; // 標記為需重新載入
                 } else {
-                    alert("儲存失敗：" + result.message);
+                    showToast("❌ 儲存失敗：" + result.message, "bg-red-500");
                 }
             } catch (error) {
-                console.error(error);
-                alert("連線發生錯誤！");
+                showToast("連線錯誤", "bg-red-500");
             } finally {
-                hideLoading();
+                btn.innerHTML = origHtml;
+                btn.disabled = false;
             }
         }
 
-        // ==================== 渲染動態牆 (預覽模式) ====================
-        function renderLibrary(filterCat) {
-            const listContainer = document.getElementById('ideas-list');
-            listContainer.innerHTML = ''; 
+        // ==========================================
+        // 渲染卡片與搜尋
+        // ==========================================
+        function filterLibrary(cat) {
+            currentFilter = cat;
+            document.querySelectorAll('#library-tabs .tab-btn').forEach(btn => {
+                const isMatch = btn.getAttribute('onclick') === `filterLibrary('${cat}')`;
+                btn.className = `tab-btn ${isMatch ? 'active' : ''}`;
+                if (isMatch) btn.scrollIntoView({behavior: "smooth", block: "nearest", inline: "center"});
+            });
 
-            const filteredIdeas = filterCat === 'all' 
-                ? allIdeas 
-                : allIdeas.filter(idea => idea['分類'] === filterCat);
+            const filteredData = cat === 'all' ? allIdeas : allIdeas.filter(i => i['分類'] === cat);
+            renderCards(filteredData, 'library-container');
+        }
 
-            if (filteredIdeas.length === 0) {
-                listContainer.innerHTML = '<div class="text-center text-gray-400 py-10">這個分類目前沒有靈感喔！</div>';
+        function searchIdeas(keyword) {
+            if (!keyword) {
+                document.getElementById('search-container').innerHTML = `
+                    <div class="text-center py-20 text-gray-400">
+                        <i class="ph ph-magnifying-glass text-5xl mb-3 opacity-30"></i>
+                        <p class="font-medium">輸入關鍵字開始尋找靈感</p>
+                    </div>`;
+                return;
+            }
+            const results = allIdeas.filter(idea => {
+                return (idea['內容描述'] || '').toLowerCase().includes(keyword) ||
+                       (idea['來源連結'] || '').toLowerCase().includes(keyword) ||
+                       (idea['分類'] || '').toLowerCase().includes(keyword);
+            });
+            renderCards(results, 'search-container');
+        }
+
+        function renderCards(dataArray, containerId) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+
+            if (dataArray.length === 0) {
+                container.innerHTML = `<div class="text-center py-20 text-gray-400"><i class="ph ph-empty text-5xl mb-2 opacity-30"></i><p class="font-medium">沒有找到相關紀錄</p></div>`;
                 return;
             }
 
-            filteredIdeas.forEach(idea => {
-                // 解析圖片：預覽牆只顯示「第一張圖」的縮圖
-                let imagePreviewHtml = '';
+            dataArray.forEach(idea => {
+                let imageHtml = '';
                 if (idea['圖片連結']) {
-                    const urls = idea['圖片連結'].toString().split('\n').filter(u => u.trim() !== '');
+                    const urls = idea['圖片連結'].toString().split(/[\n,]/).filter(u => u.trim() !== '');
                     if (urls.length > 0) {
-                        const directUrl = getDirectImageUrl(urls[0].trim());
-                        const extraCount = urls.length - 1; // 看看還有沒有其他圖片
-                        
-                        imagePreviewHtml = `
-                            <div class="relative w-full h-40 mt-2 rounded-lg overflow-hidden border border-gray-100">
-                                <img src="${directUrl}" loading="lazy" class="w-full h-full object-cover" alt="靈感圖片">
-                                <!-- 如果有多張圖片，顯示 +N 提示 -->
-                                ${extraCount > 0 ? `<div class="absolute inset-0 bg-black/40 flex justify-center items-center text-white font-bold text-xl backdrop-blur-sm">+${extraCount}</div>` : ''}
-                            </div>
-                        `;
+                        imageHtml = `<div class="card-image-gallery no-scrollbar">`;
+                        urls.forEach(url => {
+                            imageHtml += `<img src="${getDirectImageUrl(url.trim())}" loading="lazy">`;
+                        });
+                        imageHtml += `</div>`;
                     }
                 }
 
-                // 建立卡片 (加入 hover 效果與游標指標)
+                let linkHtml = '';
+                if (idea['來源連結']) {
+                    let displayUrl = idea['來源連結'];
+                    try { displayUrl = new URL(displayUrl).hostname; } catch(e){}
+                    linkHtml = `
+                        <div class="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-[13px] font-bold">
+                            <i class="ph ph-link-simple"></i>
+                            <span class="truncate max-w-[180px]">${displayUrl}</span>
+                        </div>`;
+                }
+
                 const card = document.createElement('div');
-                card.className = "bg-white p-5 rounded-xl shadow-sm border border-gray-200 flex flex-col gap-2 cursor-pointer hover:shadow-md hover:border-blue-300 transition-all";
-                card.onclick = () => openViewModal(idea['時間_ID']); // 點擊卡片開啟完整檢視
-
-                card.innerHTML = `
-                    <div class="flex justify-between items-start mb-1">
-                        <span class="inline-block px-2.5 py-1 bg-gray-100 text-gray-700 text-xs font-bold rounded-md">${idea['分類']}</span>
-                        <span class="text-xs text-gray-400">${idea['時間_顯示'] || ''}</span>
-                    </div>
-                    
-                    <!-- 截斷的文字內容 (最多 3 行) -->
-                    <p class="text-gray-800 text-base leading-relaxed line-clamp-3">${escapeHTML(idea['內容描述'] || '')}</p>
-                    
-                    <!-- 圖片縮圖預覽 -->
-                    ${imagePreviewHtml}
-                    
-                    <!-- 底部提示文字 & 編輯按鈕 -->
-                    <div class="flex justify-between items-center mt-2 pt-3 border-t border-gray-50">
-                        <span class="text-xs text-gray-400">點擊查看完整內容</span>
-                        <button onclick="event.stopPropagation(); openEditModal(${idea['時間_ID']})" class="text-sm text-gray-500 hover:text-blue-600 font-medium px-2 py-1 flex items-center gap-1 transition-colors bg-gray-50 hover:bg-blue-50 rounded-md">
-                            ✏️ 編輯
-                        </button>
-                    </div>
-                `;
-                listContainer.appendChild(card);
-            });
-        }
-
-        function filterIdeas(cat) {
-            document.querySelectorAll('.filter-btn').forEach(btn => {
-                if(btn.dataset.cat === cat) {
-                    btn.classList.replace('bg-white', 'bg-gray-800');
-                    btn.classList.replace('text-gray-700', 'text-white');
-                    btn.classList.replace('border', 'border-transparent');
-                } else {
-                    btn.classList.replace('bg-gray-800', 'bg-white');
-                    btn.classList.replace('text-white', 'text-gray-700');
-                    btn.classList.add('border');
-                }
-            });
-            renderLibrary(cat);
-        }
-
-        async function addNewCategory() {
-            const newCat = prompt("請輸入新的分類名稱：");
-            if (!newCat || newCat.trim() === '') return;
-            if (allCategories.includes(newCat.trim())) {
-                alert("此分類已經存在囉！");
-                return;
-            }
-
-            showLoading("新增分類中...");
-            try {
-                const response = await fetch(GAS_URL, {
-                    method: 'POST',
-                    body: JSON.stringify({ action: 'addCategory', category: newCat.trim() })
-                });
-                const result = await response.json();
+                card.className = "bg-white rounded-2xl p-4 shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-shadow active:scale-[0.98]";
+                card.onclick = () => openViewModal(idea['時間_ID']);
                 
-                if(result.status === 'success') {
-                    await fetchData(); 
-                }
-            } catch (error) {
-                alert("新增分類失敗！");
-            } finally {
-                hideLoading();
-            }
+                card.innerHTML = `
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="inline-block px-2.5 py-1 bg-gray-100 text-gray-700 text-xs rounded-md font-bold">${idea['分類']}</span>
+                        <span class="text-gray-400 text-xs font-medium">${idea['時間_顯示'] || ''}</span>
+                    </div>
+                    ${idea['內容描述'] ? `<p class="text-gray-800 text-[15px] leading-relaxed line-clamp-3 mt-1">${escapeHTML(idea['內容描述'])}</p>` : ''}
+                    ${imageHtml}
+                    ${linkHtml}
+                `;
+                container.appendChild(card);
+            });
         }
 
-        // ==================== 檢視完整內容 (View Modal) ====================
+        // ==========================================
+        // Modal 功能 (檢視/編輯/刪除)
+        // ==========================================
+        let currentEditingId = null;
+
         function openViewModal(rowId) {
             const idea = allIdeas.find(i => i['時間_ID'] == rowId);
             if(!idea) return;
+            currentEditingId = rowId;
 
             document.getElementById('view-category').innerText = idea['分類'];
             document.getElementById('view-time').innerText = idea['時間_顯示'] || '';
             document.getElementById('view-text').innerHTML = escapeHTML(idea['內容描述'] || '');
 
-            // 處理所有圖片的大圖顯示
             const imagesContainer = document.getElementById('view-images');
             imagesContainer.innerHTML = '';
             if (idea['圖片連結']) {
-                const urls = idea['圖片連結'].toString().split('\n').filter(u => u.trim() !== '');
+                const urls = idea['圖片連結'].toString().split(/[\n,]/).filter(u => u.trim() !== '');
                 urls.forEach(url => {
-                    const directUrl = getDirectImageUrl(url.trim());
-                    imagesContainer.innerHTML += `<img src="${directUrl}" loading="lazy" class="w-full h-auto rounded-lg border border-gray-200 shadow-sm">`;
+                    imagesContainer.innerHTML += `<img src="${getDirectImageUrl(url.trim())}" loading="lazy" class="w-full h-auto rounded-xl border border-gray-200">`;
                 });
             }
 
-            // 處理外部連結
             const linkContainer = document.getElementById('view-link-container');
-            linkContainer.innerHTML = '';
             if (idea['來源連結']) {
                 linkContainer.innerHTML = `
-                    <a href="${idea['來源連結']}" target="_blank" class="inline-flex justify-center items-center text-base font-bold text-blue-600 bg-blue-50 border border-blue-100 px-4 py-3 rounded-xl hover:bg-blue-100 transition-colors w-full">
-                        🔗 點擊前往參考連結
-                    </a>
-                `;
+                    <a href="${idea['來源連結']}" target="_blank" class="flex justify-center items-center gap-2 text-[15px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-4 py-3.5 rounded-xl hover:bg-blue-100 transition-colors w-full">
+                        <i class="ph ph-arrow-square-out text-lg"></i> 開啟參考網址
+                    </a>`;
+            } else {
+                linkContainer.innerHTML = '';
             }
 
-            // 設定在 View Modal 內的編輯按鈕行為
-            const editBtn = document.getElementById('view-edit-btn');
-            editBtn.onclick = () => {
-                closeViewModal(); // 先關閉檢視視窗
-                openEditModal(rowId); // 再開啟編輯視窗
-            };
+            document.getElementById('view-edit-btn').onclick = () => { closeViewModal(); openEditModal(rowId); };
+            document.getElementById('view-delete-btn').onclick = () => deleteIdea(rowId);
 
-            document.body.classList.add('overflow-hidden'); // 鎖定背景捲動
             document.getElementById('view-modal').classList.remove('hidden');
         }
 
         function closeViewModal() {
-            document.body.classList.remove('overflow-hidden'); // 恢復背景捲動
             document.getElementById('view-modal').classList.add('hidden');
         }
 
-        // ==================== 編輯功能 (Edit Modal) ====================
         function openEditModal(rowId) {
             const idea = allIdeas.find(i => i['時間_ID'] == rowId);
             if(!idea) return;
@@ -496,13 +763,13 @@
             document.getElementById('edit-content').value = idea['內容描述'] || '';
             document.getElementById('edit-url').value = idea['來源連結'] || '';
             
-            document.body.classList.add('overflow-hidden'); // 鎖定背景捲動
             document.getElementById('edit-modal').classList.remove('hidden');
+            document.getElementById('edit-modal').classList.add('flex');
         }
 
         function closeEditModal() {
-            document.body.classList.remove('overflow-hidden'); // 恢復背景捲動
             document.getElementById('edit-modal').classList.add('hidden');
+            document.getElementById('edit-modal').classList.remove('flex');
         }
 
         async function submitEdit() {
@@ -517,40 +784,168 @@
             try {
                 const response = await fetch(GAS_URL, {
                     method: 'POST',
-                    body: JSON.stringify({
-                        action: 'updateIdea',
-                        id: rowId,
-                        category: category,
-                        content: content,
-                        url: url
-                    })
+                    body: JSON.stringify({ action: 'updateIdea', id: rowId, category, content, url })
                 });
                 const result = await response.json();
-                
                 if(result.status === 'success') {
+                    showToast("✅ 更新成功", "bg-green-600");
                     await fetchData(); 
-                } else {
-                    alert("更新失敗：" + result.message);
+                } else throw new Error(result.message);
+            } catch (error) {
+                showToast("更新失敗，請稍後再試", "bg-red-500");
+            } finally { hideLoading(); }
+        }
+
+        async function deleteIdea(rowId) {
+            if (!confirm("確定要刪除這筆靈感嗎？此動作無法復原。")) return;
+            
+            showLoading("刪除中...");
+            closeViewModal();
+
+            try {
+                const response = await fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'deleteIdea', id: rowId })
+                });
+                const result = await response.json();
+                if(result.status === 'success') {
+                    showToast("🗑️ 已刪除靈感", "bg-gray-800");
+                    await fetchData(); 
+                } else throw new Error(result.message);
+            } catch (error) {
+                showToast("刪除失敗，請確保 GAS 腳本已加入 deleteIdea 邏輯", "bg-red-500");
+            } finally { hideLoading(); }
+        }
+
+        // ==========================================
+        // 設定與分類管理
+        // ==========================================
+        function saveSettings() {
+            const key = document.getElementById('api-key-input').value.trim();
+            localStorage.setItem('geminiApiKey', key);
+            showToast("✅ 設定已安全儲存於手機", "bg-green-600");
+        }
+
+        async function addNewCategory() {
+            const inputEl = document.getElementById('new-category-input');
+            const newCat = inputEl.value.trim();
+            if (!newCat) return;
+            if (allCategories.includes(newCat)) {
+                showToast("⚠️ 此分類已經存在", "bg-orange-500");
+                return;
+            }
+
+            showLoading("新增分類中...");
+            try {
+                const response = await fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'addCategory', category: newCat })
+                });
+                const result = await response.json();
+                if(result.status === 'success') {
+                    inputEl.value = '';
+                    showToast("✅ 分類新增成功", "bg-green-600");
+                    await fetchData(true); // 重新抓取資料更新選單
                 }
             } catch (error) {
-                alert("連線發生錯誤！");
+                showToast("新增失敗", "bg-red-500");
+            } finally { hideLoading(); }
+        }
+
+        // ==========================================
+        // 增強版 AI 智慧提取 (支援多圖視覺辨識 + 文本)
+        // ==========================================
+        async function aiSummarize() {
+            const apiKey = localStorage.getItem('geminiApiKey');
+            if (!apiKey) {
+                switchView('settings', document.querySelectorAll('.nav-item')[3]);
+                showToast("請先在此輸入您的 Gemini API Key", "bg-purple-600");
+                return;
+            }
+
+            const content = document.getElementById('add-content').value.trim();
+            const url = document.getElementById('add-url').value.trim();
+            
+            if (!content && !url && uploadedImagesBase64.length === 0) {
+                showToast("請先輸入文字或上傳圖片讓 AI 分析", "bg-orange-500");
+                return;
+            }
+
+            const btn = document.getElementById('ai-btn');
+            const origHtml = btn.innerHTML;
+            btn.innerHTML = '<i class="ph ph-spinner animate-spin text-lg"></i><span>分析中...</span>';
+            btn.disabled = true;
+
+            try {
+                // 建構提示詞 (Prompt)
+                let promptText = `你是一個專業的靈感整理助手。請分析使用者提供的內容（可能是文字、網址或圖片）。
+                1. 請給出一段精煉的重點摘要或提取圖片中的文字（100字以內）。
+                2. 從現有分類中選擇最適合的一個，如果都不適合，建議一個新分類。
+                現有分類：${allCategories.join(', ')}。
+                
+                請嚴格輸出 JSON 格式，包含 "summary" 和 "category" 兩個 key。`;
+                
+                if (content) promptText += `\n\n使用者筆記：${content}`;
+                if (url) promptText += `\n\n參考網址：${url}`;
+
+                // 準備 Payload (結合文字與圖片)
+                const parts = [{ text: promptText }];
+                uploadedImagesBase64.forEach(base64 => {
+                    const dataObj = base64.split(',')[1]; // 去除前綴
+                    parts.push({
+                        inlineData: { mimeType: "image/jpeg", data: dataObj }
+                    });
+                });
+
+                const payload = {
+                    contents: [{ role: "user", parts: parts }],
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "OBJECT",
+                            properties: {
+                                summary: { type: "STRING" },
+                                category: { type: "STRING" }
+                            }
+                        }
+                    }
+                };
+
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                const result = await response.json();
+                if (result.error) throw new Error(result.error.message);
+
+                const aiText = result.candidates[0].content.parts[0].text;
+                const parsed = JSON.parse(aiText);
+
+                // 自動填入內容與分類
+                if (parsed.summary) {
+                    const el = document.getElementById('add-content');
+                    el.value = el.value ? `【AI 分析】${parsed.summary}\n\n---\n${el.value}` : `【AI 分析】${parsed.summary}`;
+                }
+                if (parsed.category) {
+                    let catSelect = document.getElementById('add-category');
+                    if (!Array.from(catSelect.options).some(opt => opt.value === parsed.category)) {
+                        catSelect.innerHTML += `<option value="${parsed.category}">${parsed.category}</option>`;
+                    }
+                    catSelect.value = parsed.category;
+                }
+                
+                showToast("✨ AI 提取完成！", "bg-green-600");
+
+            } catch (error) {
+                console.error(error);
+                showToast("AI 分析失敗：" + error.message, "bg-red-500");
             } finally {
-                hideLoading();
+                btn.innerHTML = origHtml;
+                btn.disabled = false;
             }
         }
-
-        function escapeHTML(str) {
-            return str.replace(/[&<>'"]/g, 
-                tag => ({
-                    '&': '&amp;',
-                    '<': '&lt;',
-                    '>': '&gt;',
-                    "'": '&#39;',
-                    '"': '&quot;'
-                }[tag] || tag)
-            );
-        }
-
     </script>
 </body>
 </html>
