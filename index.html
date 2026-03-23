@@ -124,7 +124,7 @@
                     <label class="block text-sm font-medium text-gray-500 mb-2">選擇分類 (Drive 資料夾)</label>
                     <div class="relative">
                         <select id="category" class="w-full bg-white border border-gray-200 text-gray-900 rounded-xl px-4 py-3 appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-base shadow-sm">
-                            <option value="📂 其他">📂 其他未分類</option>
+                            <option value="📂 其他">📂 其他</option>
                         </select>
                         <i class="ph ph-caret-down absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none"></i>
                     </div>
@@ -208,6 +208,17 @@
 
             <!-- ================= VIEW: 設定 (Settings) ================= -->
             <section id="view-settings" class="view-section px-6 py-6 space-y-6">
+                <!-- 新增：分類管理區塊 -->
+                <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-6">
+                    <h3 class="text-sm font-bold text-gray-800 mb-3 flex items-center"><i class="ph ph-folder-plus text-lg mr-2 text-blue-500"></i>分類管理</h3>
+                    <div class="flex space-x-2">
+                        <input type="text" id="newCategoryInput" placeholder="例如：✈️ 旅遊規劃" class="flex-1 bg-gray-50 border border-gray-200 text-gray-900 rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                        <button id="addCategoryBtn" class="bg-blue-50 text-blue-600 border border-blue-200 px-4 py-2 rounded-xl font-medium text-sm hover:bg-blue-100 transition-colors shrink-0">新增</button>
+                    </div>
+                    <p id="categoryMsg" class="text-xs font-medium mt-2 hidden"></p>
+                    <p class="text-[11px] text-gray-400 mt-2 leading-relaxed">新增的分類會自動同步到 Google Sheet 的「分類設定」分頁中。</p>
+                </div>
+
                 <div>
                     <label class="block text-sm font-medium text-gray-500 mb-2">Gemini API Key</label>
                     <div class="relative shadow-sm rounded-xl mb-2">
@@ -250,7 +261,7 @@
         // ==========================================
         // ⚠️ 第 1 步：請將這裡換成你剛才部署 GAS 取得的網址
         // ==========================================
-        const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbw5AzznTkJak4avz_8o__QlISZWy8D64Z8OMJuHBKv0nOsa2AJWvfLJUzSNUtf5YxhzVQ/exec'; 
+        const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycby1Qmf7BBFt10u6I_fTP3ZXRdnh7LZ0CpxRd3aPts7Ji5nCHs0-R3X8hoAcDQTTGHwfiw/exec'; 
 
         // 全域變數
         let allIdeas = []; // 快取從 GAS 載入的資料
@@ -402,7 +413,7 @@
                 return;
             }
 
-            const payload = { category, content, url, images: base64ImagesArray };
+            const payload = { action: 'addIdea', category, content, url, images: base64ImagesArray };
             const originalBtnText = submitBtn.innerHTML;
             submitBtn.innerHTML = '<i class="ph ph-spinner animate-spin text-xl"></i><span>上傳中...</span>';
             submitBtn.disabled = true;
@@ -543,7 +554,58 @@
         });
 
         // ==========================================
-        // 載入與渲染靈感庫 (Library)
+        // 分類管理邏輯 (新增分類到 Google Sheet)
+        // ==========================================
+        document.getElementById('addCategoryBtn').addEventListener('click', async () => {
+            const inputEl = document.getElementById('newCategoryInput');
+            const msgEl = document.getElementById('categoryMsg');
+            const btnEl = document.getElementById('addCategoryBtn');
+            const newCat = inputEl.value.trim();
+
+            if (!newCat) return;
+            
+            if (dynamicCategories.includes(newCat)) {
+                msgEl.textContent = '⚠️ 此分類已存在';
+                msgEl.className = 'text-xs font-medium mt-2 text-red-500';
+                msgEl.classList.remove('hidden');
+                return;
+            }
+
+            const originalText = btnEl.innerHTML;
+            btnEl.innerHTML = '<i class="ph ph-spinner animate-spin text-lg"></i>';
+            btnEl.disabled = true;
+
+            try {
+                const response = await fetch(GAS_WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'addCategory', category: newCat }),
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                });
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    dynamicCategories.push(newCat);
+                    updateCategoryUI(); // 立即更新介面
+                    inputEl.value = '';
+                    msgEl.textContent = '✅ 分類新增成功！';
+                    msgEl.className = 'text-xs font-medium mt-2 text-green-600';
+                    msgEl.classList.remove('hidden');
+                    setTimeout(() => msgEl.classList.add('hidden'), 3000);
+                } else {
+                    throw new Error(result.message);
+                }
+            } catch (error) {
+                msgEl.textContent = '❌ 新增失敗，請檢查網路';
+                msgEl.className = 'text-xs font-medium mt-2 text-red-500';
+                msgEl.classList.remove('hidden');
+            } finally {
+                btnEl.innerHTML = originalText;
+                btnEl.disabled = false;
+            }
+        });
+
+        // ==========================================
+        // 載入與渲染靈感庫 (Library) & 分類
         // ==========================================
         document.getElementById('refreshBtn').addEventListener('click', () => fetchLibraryData(false));
 
@@ -559,11 +621,18 @@
 
             try {
                 const response = await fetch(GAS_WEB_APP_URL);
-                allIdeas = await response.json();
-                isDataLoaded = true;
+                const result = await response.json();
                 
-                // --- 自動從 Google Sheet 提取並更新分類 ---
-                extractCategoriesFromData();
+                // 檢查後端回傳的是新格式 {ideas: [], categories: []} 還是舊的陣列格式
+                if (result.ideas && result.categories) {
+                    allIdeas = result.ideas;
+                    dynamicCategories = result.categories;
+                } else {
+                    allIdeas = result;
+                }
+                
+                isDataLoaded = true;
+                updateCategoryUI();
                 
                 if (!isBackground) {
                     filterLibrary(currentCategory); // 重新應用當前的過濾
@@ -578,17 +647,6 @@
                     document.getElementById('refreshBtn').querySelector('i').classList.remove('animate-spin');
                 }
             }
-        }
-
-        // --- 新增：從資料中提取所有不重複的分類 ---
-        function extractCategoriesFromData() {
-            // 從所有資料中找出不重複的分類
-            const fetchedCategories = [...new Set(allIdeas.map(idea => idea['分類']))].filter(Boolean);
-            
-            // 將試算表中的分類與預設分類合併，並確保不重複
-            dynamicCategories = [...new Set([...fetchedCategories, ...dynamicCategories])];
-            
-            updateCategoryUI();
         }
 
         // --- 新增：更新 UI 上的選單與標籤 ---
