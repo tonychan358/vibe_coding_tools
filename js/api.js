@@ -36,8 +36,8 @@ export async function submitIdeaAPI(gasUrl, payload) {
 
 export async function aiSummarizeAPI(apiKey, payload) {
     try {
-        // Using gemini-1.5-flash for maximum stability/compatibility with current keys
-        const model = "gemini-1.5-flash";
+        // Use gemini-2.0-flash as it is supported in the current environment
+        const model = "gemini-2.0-flash";
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
