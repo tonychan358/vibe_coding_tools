@@ -99,7 +99,7 @@ main {
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     position: sticky;
-    top: 64px;
+    top: 0;
     /* header height */
     z-index: 40;
     border-bottom: 1px solid hsl(var(--border));

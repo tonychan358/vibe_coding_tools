@@ -15,6 +15,11 @@
 
     <title>靈感收集器</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <link rel="stylesheet" href="css/style.css">
 </head>
@@ -127,7 +132,7 @@
             <!-- View 4: Settings -->
             <section id="view-settings" class="view-section px-5 py-6 space-y-6">
                 <div
-                    class="bg-white dark:bg-gray-900/50 rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-gray-800">
+                    class="bg-white dark:bg-[#151c2c] rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-gray-800">
                     <h3 class="text-base font-bold text-gray-800 dark:text-gray-200 mb-3"><i
                             class="ph ph-folder-plus text-xl mr-2 text-blue-500"></i>分類管理</h3>
                     <div class="flex space-x-2">
@@ -139,7 +144,7 @@
                 </div>
 
                 <div
-                    class="bg-white dark:bg-gray-900/50 rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-gray-800">
+                    class="bg-white dark:bg-[#151c2c] rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-gray-800">
                     <h3 class="text-base font-bold text-gray-800 dark:text-gray-200 mb-3"><i
                             class="ph ph-key text-xl mr-2 text-purple-500"></i>Gemini API Key</h3>
                     <input type="password" id="api-key-input" placeholder="API Key..."
@@ -149,7 +154,7 @@
                 </div>
 
                 <div
-                    class="bg-white dark:bg-gray-900/50 rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-gray-800">
+                    class="bg-white dark:bg-[#151c2c] rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-gray-800">
                     <h3 class="text-base font-bold text-gray-800 dark:text-gray-200 mb-4 flex items-center"><i
                             class="ph ph-palette text-xl mr-2 text-indigo-500"></i>顯示與介面</h3>
                     <div class="flex items-center justify-between">
