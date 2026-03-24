@@ -1,5 +1,5 @@
 :root {
-    /* Light Mode Tokens */
+    /* Light Mode Tokens - Refined */
     --bg-main: 210 20% 98%;
     --bg-container: 0 0% 100%;
     --primary: 221 83% 53%;
@@ -17,18 +17,19 @@
 }
 
 .dark {
-    --bg-main: 222 47% 4%;
-    --bg-container: 222 47% 6%;
+    /* Dark Mode Tokens - Deeper & High Contrast */
+    --bg-main: 224 71% 4%;
+    --bg-container: 224 71% 4%;
     --primary: 217 91% 60%;
     --primary-foreground: 222 47% 11%;
-    --secondary: 217 33% 17%;
+    --secondary: 217 33% 12%;
     --secondary-foreground: 210 40% 98%;
     --accent: 263 70% 50%;
     --muted: 217 33% 17%;
     --muted-foreground: 215 20% 65%;
-    --card: 222 47% 11%;
+    --card: 222 47% 10%;
     --card-foreground: 210 40% 98%;
-    --border: 217 33% 17%;
+    --border: 217 33% 18%;
     --ring: 224 76% 48%;
 }
 
@@ -55,10 +56,13 @@ body {
 }
 
 header {
-    background-color: hsla(var(--bg-container) / 0.8);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background-color: hsla(var(--bg-container) / 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     border-bottom: 1px solid hsl(var(--border));
+    position: sticky;
+    top: 0;
+    z-index: 100;
 }
 
 nav {
@@ -86,19 +90,35 @@ main {
     display: none;
 }
 
+.category-tabs {
+    display: flex;
+    gap: 8px;
+    padding: 12px 20px;
+    overflow-x: auto;
+    background-color: hsla(var(--bg-container) / 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    position: sticky;
+    top: 64px;
+    /* header height */
+    z-index: 40;
+    border-bottom: 1px solid hsl(var(--border));
+}
+
 .view-section.active {
     display: block;
-    animation: fadeIn 0.3s ease-out;
+    animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes fadeIn {
     from {
         opacity: 0;
-        transform: translateY(10px);
+        transform: translateY(8px) scale(0.99);
     }
+
     to {
         opacity: 1;
-        transform: translateY(0);
+        transform: translateY(0) scale(1);
     }
 }
 
@@ -113,19 +133,26 @@ main {
 
 .tab-btn {
     white-space: nowrap;
-    padding: 8px 16px;
-    border-radius: 999px;
-    background: hsl(var(--secondary));
+    padding: 6px 16px;
+    border-radius: 12px;
+    background: hsla(var(--secondary) / 0.5);
     color: hsl(var(--muted-foreground));
     font-size: 0.875rem;
-    font-weight: 500;
-    transition: all 0.2s;
+    font-weight: 600;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid transparent;
+}
+
+.tab-btn:hover {
+    background: hsl(var(--secondary));
+    color: hsl(var(--card-foreground));
 }
 
 .tab-btn.active {
     background: hsl(var(--primary));
     color: hsl(var(--primary-foreground));
-    box-shadow: 0 4px 12px hsla(var(--primary) / 0.3);
+    box-shadow: 0 8px 16px -4px hsla(var(--primary) / 0.25);
+    border-color: hsla(var(--primary) / 0.2);
 }
 
 .card {
@@ -133,12 +160,19 @@ main {
     border: 1px solid hsl(var(--border));
     border-radius: var(--radius);
     padding: 1.25rem;
-    transition: all 0.2s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.card:hover {
+    border-color: hsla(var(--primary) / 0.3);
+    box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
 }
 
 .card:active {
-    transform: scale(0.98);
+    transform: scale(0.985) translateY(0);
 }
 
 mark {
@@ -167,6 +201,7 @@ mark {
     0% {
         transform: rotate(0deg);
     }
+
     100% {
         transform: rotate(360deg);
     }
