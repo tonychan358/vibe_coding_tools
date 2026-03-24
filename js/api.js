@@ -36,16 +36,25 @@ export async function submitIdeaAPI(gasUrl, payload) {
 
 export async function aiSummarizeAPI(apiKey, payload) {
     try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+        // Using gemini-1.5-flash for maximum stability/compatibility with current keys
+        const model = "gemini-1.5-flash";
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
         const result = await response.json();
         if (result.error) throw new Error(result.error.message);
-        return JSON.parse(result.candidates[0].content.parts[0].text);
+
+        const text = result.candidates[0].content.parts[0].text;
+
+        // Robust JSON extraction (removes markdown backticks if any)
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error("AI 回傳格式不正確 (找不到 JSON)");
+
+        return JSON.parse(jsonMatch[0]);
     } catch (error) {
-        console.error(error);
+        console.error("Gemini API Error:", error);
         throw error;
     }
 }

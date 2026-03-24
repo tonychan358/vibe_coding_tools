@@ -283,7 +283,8 @@ async function aiSummarize() {
         }
         utils.showToast("✨ AI 完成", "bg-green-600");
     } catch (e) {
-        utils.showToast("AI 失敗: " + e.message, "bg-red-500");
+        console.error("AI Error:", e);
+        utils.showToast(`✨ AI 錯誤: ${e.message.substring(0, 30)}...`, "bg-red-500");
     } finally {
         btn.innerHTML = origHtml;
         btn.disabled = false;
