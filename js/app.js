@@ -57,14 +57,59 @@ export async function init() {
 }
 
 async function loadData(isSilent = false) {
+    let hasLoadedFromCache = false;
+
+    // 1. Try Cache First for instant UI rendering
+    if (!isSilent) {
+        const cachedData = localStorage.getItem('ideaApp_cache');
+        if (cachedData) {
+            try {
+                const data = JSON.parse(cachedData);
+                allIdeas = data.ideas || [];
+                allCategories = data.categories || ['未分類'];
+                updateCategoriesUI();
+                window.filterLibrary(currentFilter);
+
+                hasLoadedFromCache = true;
+                isSilent = true; // Switch to background sync mode
+
+                // Show subtle syncing indicator
+                utils.showToast("🔄 背景同步中...", "bg-blue-600");
+                const refreshBtn = document.getElementById('refreshBtn');
+                if (refreshBtn) {
+                    refreshBtn.innerHTML = '<i class="ph ph-spinner animate-spin text-2xl text-blue-500"></i>';
+                }
+            } catch (e) {
+                console.error("Cache read error:", e);
+            }
+        }
+    }
+
+    // 2. Fetch fresh data from GAS
     const data = await api.fetchData(GAS_URL, isSilent);
     if (data) {
         allIdeas = data.ideas;
         allCategories = data.categories;
+
+        // Save to cache
+        localStorage.setItem('ideaApp_cache', JSON.stringify(data));
+
+        // Re-render with fresh data only if needed or just to be safe
         updateCategoriesUI();
         window.filterLibrary(currentFilter);
+
+        if (hasLoadedFromCache) {
+            utils.showToast("✅ 資料已同步至最新", "bg-green-600");
+        }
+    }
+
+    // Reset refresh icon if it was spinning
+    const refreshBtn = document.getElementById('refreshBtn');
+    if (refreshBtn) {
+        refreshBtn.innerHTML = '<i class="ph ph-arrows-clockwise text-2xl"></i>';
     }
 }
+
 
 function updateCategoriesUI() {
     const addSelect = document.getElementById('add-category');
