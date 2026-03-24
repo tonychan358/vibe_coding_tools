@@ -13,6 +13,24 @@ let currentFilter = 'all';
 const GAS_URL = window.GAS_URL; // From index.html
 
 export async function init() {
+    // Globalize functions needed by HTML onclick IMMEDIATELY
+    window.switchView = ui.switchView;
+    window.filterLibrary = (cat) => {
+        currentFilter = cat;
+        updateCategoriesUI();
+        const filtered = cat === 'all' ? allIdeas : allIdeas.filter(i => i['分類'] === cat);
+        ui.renderCards(filtered, 'library-container', '', openViewModal);
+    };
+    window.fetchData = () => loadData(false);
+    window.submitIdea = submitIdea;
+    window.aiSummarize = aiSummarize;
+    window.saveSettings = saveSettings;
+    window.addNewCategory = addNewCategory;
+    window.toggleDarkMode = toggleDarkMode;
+    window.closeViewModal = () => document.getElementById('view-modal').classList.add('hidden');
+    window.closeEditModal = () => document.getElementById('edit-modal').classList.add('hidden');
+    window.submitEdit = submitEdit;
+
     setupPWA();
 
     // Initial UI state
@@ -36,24 +54,6 @@ export async function init() {
     });
 
     document.getElementById('image-upload').addEventListener('change', handleImageUpload);
-
-    // Globalize functions needed by HTML onclick
-    window.switchView = ui.switchView;
-    window.filterLibrary = (cat) => {
-        currentFilter = cat;
-        updateCategoriesUI();
-        const filtered = cat === 'all' ? allIdeas : allIdeas.filter(i => i['分類'] === cat);
-        ui.renderCards(filtered, 'library-container', '', openViewModal);
-    };
-    window.fetchData = () => loadData(false);
-    window.submitIdea = submitIdea;
-    window.aiSummarize = aiSummarize;
-    window.saveSettings = saveSettings;
-    window.addNewCategory = addNewCategory;
-    window.toggleDarkMode = toggleDarkMode;
-    window.closeViewModal = () => document.getElementById('view-modal').classList.add('hidden');
-    window.closeEditModal = () => document.getElementById('edit-modal').classList.add('hidden');
-    window.submitEdit = submitEdit;
 }
 
 async function loadData(isSilent = false) {
@@ -315,23 +315,6 @@ function toggleDarkMode() {
     utils.showToast(isDark ? "🌙 深色模式" : "☀️ 淺色模式");
 }
 
-function setupPWA() {
-    const manifest = {
-        name: "靈感收集器",
-        short_name: "IdeaApp",
-        start_url: ".",
-        display: "standalone",
-        background_color: "#ffffff",
-        theme_color: "#2563eb",
-        icons: [{
-            src: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Google_Keep_icon_%282020%29.svg/512px-Google_Keep_icon_%282020%29.svg.png",
-            sizes: "512x512",
-            type: "image/png"
-        }]
-    };
-    const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
-    document.querySelector('head').insertAdjacentHTML('beforeend', `<link rel="manifest" href="${URL.createObjectURL(blob)}">`);
-}
 function setupPWA() {
     const manifest = {
         name: "靈感收集器",
